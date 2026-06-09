@@ -2,7 +2,9 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <set>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -10,6 +12,7 @@
 
 #include "opengil/gil.hpp"
 #include "opengil/json.hpp"
+#include "opengil/json_value.hpp"
 #include "opengil/model_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/semantic.hpp"
@@ -39,6 +42,13 @@ struct CliError : std::runtime_error {
 
   CliError(std::string c, std::string message, int e)
       : std::runtime_error(std::move(message)), code(std::move(c)), exit_code(e) {}
+};
+
+struct BatchOp {
+  std::string op;
+  uint64_t prefab_id = 0;
+  std::optional<uint64_t> asset_id;
+  std::string name;
 };
 
 Args parse_args(int argc, char** argv) {
@@ -111,6 +121,28 @@ std::string file_input_json(const GilFile& file) {
 
 std::string null_input_json() {
   return "null";
+}
+
+std::string read_text_file(const std::filesystem::path& path) {
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw CliError("FILE_ERROR", "failed to open file: " + path.string(), EXIT_PARSE);
+  }
+  std::ostringstream out;
+  out << stream.rdbuf();
+  if (!stream.good() && !stream.eof()) {
+    throw CliError("FILE_ERROR", "failed to read file: " + path.string(), EXIT_PARSE);
+  }
+  return out.str();
+}
+
+void write_bytes_to_path(const std::filesystem::path& path, std::span<const uint8_t> bytes) {
+  const auto parent = path.parent_path();
+  if (!parent.empty()) std::filesystem::create_directories(parent);
+  std::ofstream stream(path, std::ios::binary);
+  if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + path.string(), EXIT_WRITE);
+  stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + path.string(), EXIT_WRITE);
 }
 
 std::string output_file_json(const std::filesystem::path& path, std::span<const uint8_t> bytes) {
@@ -269,6 +301,92 @@ std::filesystem::path resolve_write_output_path(const Args& args, const std::fil
   return output.empty() ? std::filesystem::path{} : std::filesystem::path(output);
 }
 
+const opengil::json::Value* find_any(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys) {
+  for (std::string_view key : keys) {
+    if (const auto* value = object.find(key)) return value;
+  }
+  return nullptr;
+}
+
+std::string batch_context(size_t index) {
+  std::ostringstream out;
+  out << "batch op " << index;
+  return out.str();
+}
+
+std::string require_json_string(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys,
+    size_t index) {
+  const auto* value = find_any(object, keys);
+  if (!value || !value->is_string()) {
+    throw CliError("USAGE", batch_context(index) + " is missing a required string field", EXIT_USAGE);
+  }
+  return value->string_value;
+}
+
+uint64_t require_json_u64(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys,
+    size_t index) {
+  const auto* value = find_any(object, keys);
+  if (!value || !value->is_unsigned()) {
+    throw CliError("USAGE", batch_context(index) + " is missing a required unsigned integer field", EXIT_USAGE);
+  }
+  return value->unsigned_value;
+}
+
+std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
+  opengil::json::Value root;
+  try {
+    root = opengil::json::parse_value(text);
+  } catch (const std::exception& error) {
+    throw CliError("OPS_JSON_INVALID", error.what(), EXIT_USAGE);
+  }
+
+  const opengil::json::Value* ops = nullptr;
+  if (root.is_array()) {
+    ops = &root;
+  } else if (root.is_object()) {
+    ops = root.find("ops");
+  }
+
+  if (!ops || !ops->is_array()) {
+    throw CliError("USAGE", "batch ops must be a JSON array or an object with an ops array", EXIT_USAGE);
+  }
+
+  std::vector<BatchOp> parsed;
+  parsed.reserve(ops->array_value.size());
+  for (size_t index = 0; index < ops->array_value.size(); ++index) {
+    const auto& item = ops->array_value[index];
+    if (!item.is_object()) {
+      throw CliError("USAGE", batch_context(index) + " must be a JSON object", EXIT_USAGE);
+    }
+
+    BatchOp op;
+    op.op = require_json_string(item, {"op", "command"}, index);
+    op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
+    if (op.op == "set-model") {
+      op.asset_id = require_json_u64(item, {"assetId", "asset-id", "modelAssetId", "model-asset-id"}, index);
+    } else if (op.op == "set-empty-model") {
+      // No extra fields.
+    } else if (op.op == "rename-prefab") {
+      op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
+    } else {
+      throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
+    }
+    parsed.push_back(std::move(op));
+  }
+
+  return parsed;
+}
+
+void add_changed_fields(std::set<uint32_t>& changed, const std::vector<uint32_t>& fields) {
+  for (uint32_t field : fields) changed.insert(field);
+}
+
 std::string handle_set_model(const Args& args, bool empty_model) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
@@ -283,12 +401,7 @@ std::string handle_set_model(const Args& args, bool empty_model) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    const auto parent = output_path.parent_path();
-    if (!parent.empty()) std::filesystem::create_directories(parent);
-    std::ofstream stream(output_path, std::ios::binary);
-    if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + output_path.string(), EXIT_WRITE);
-    stream.write(reinterpret_cast<const char*>(mutation.bytes.data()), static_cast<std::streamsize>(mutation.bytes.size()));
-    if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + output_path.string(), EXIT_WRITE);
+    write_bytes_to_path(output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -316,12 +429,7 @@ std::string handle_rename_prefab(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    const auto parent = output_path.parent_path();
-    if (!parent.empty()) std::filesystem::create_directories(parent);
-    std::ofstream stream(output_path, std::ios::binary);
-    if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + output_path.string(), EXIT_WRITE);
-    stream.write(reinterpret_cast<const char*>(mutation.bytes.data()), static_cast<std::streamsize>(mutation.bytes.size()));
-    if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + output_path.string(), EXIT_WRITE);
+    write_bytes_to_path(output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -331,6 +439,90 @@ std::string handle_rename_prefab(const Args& args) {
     result += ",\"dryRun\":true}";
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_batch(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile input_file = opengil::load_gil_file(input_path);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  const auto ops_path = std::filesystem::path(require_value(args, "ops"));
+  const auto ops = parse_batch_ops_text(read_text_file(ops_path));
+
+  GilFile current = input_file;
+  std::vector<uint8_t> final_bytes = input_file.bytes;
+  std::vector<std::string> item_jsons;
+  std::set<uint32_t> changed_top_fields;
+  item_jsons.reserve(ops.size());
+
+  for (size_t index = 0; index < ops.size(); ++index) {
+    const auto& op = ops[index];
+    try {
+      std::string result_json;
+      if (op.op == "set-model") {
+        const auto mutation = opengil::set_prefab_model_asset_id(current, op.prefab_id, *op.asset_id);
+        result_json = opengil::set_model_summary_to_json(mutation.model_summary);
+        add_changed_fields(changed_top_fields, mutation.model_summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "set-empty-model") {
+        const auto mutation = opengil::set_prefab_to_empty_model(current, op.prefab_id);
+        result_json = opengil::set_model_summary_to_json(mutation.model_summary);
+        add_changed_fields(changed_top_fields, mutation.model_summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "rename-prefab") {
+        const auto mutation = opengil::rename_prefab(current, op.prefab_id, op.name);
+        result_json = opengil::rename_prefab_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      }
+
+      current.bytes = final_bytes;
+      std::ostringstream item;
+      item << "{"
+           << "\"index\":" << index << ","
+           << "\"op\":" << opengil::json::quote(op.op) << ","
+           << "\"result\":" << result_json
+           << "}";
+      item_jsons.push_back(item.str());
+    } catch (const std::exception& error) {
+      throw CliError(
+          "BATCH_OP_FAILED",
+          batch_context(index) + " (" + op.op + ") failed: " + error.what(),
+          EXIT_SEMANTIC);
+    }
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, final_bytes);
+    output_json = output_file_json(output_path, final_bytes);
+  }
+
+  std::ostringstream result;
+  result << "{"
+         << "\"opCount\":" << ops.size() << ","
+         << "\"changedTopFields\":[";
+  bool first = true;
+  for (uint32_t field : changed_top_fields) {
+    if (!first) result << ",";
+    first = false;
+    result << field;
+  }
+  result << "],\"items\":[";
+  for (size_t i = 0; i < item_jsons.size(); ++i) {
+    if (i) result << ",";
+    result << item_jsons[i];
+  }
+  result << "]";
+  if (dry_run) result << ",\"dryRun\":true";
+  result << "}";
+
+  const auto json = envelope(args.command, true, file_input_json(input_file), output_json, result.str(), {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -417,6 +609,8 @@ int main(int argc, char** argv) {
       output = handle_set_model(args, true);
     } else if (args.command == "rename-prefab") {
       output = handle_rename_prefab(args);
+    } else if (args.command == "batch") {
+      output = handle_batch(args);
     } else {
       output = handle_with_input(args);
     }

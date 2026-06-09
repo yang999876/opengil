@@ -24,6 +24,7 @@ The CLI target is `opengil`.
 .\build\Release\opengil.exe list-prefabs --input I:\Wanderland\genshin-ts\backups\test1.gil
 .\build\Release\opengil.exe set-model --input I:\Wanderland\genshin-ts\backups\test1.gil --output out.gil --prefab-id 1086324737 --asset-id 20001220
 .\build\Release\opengil.exe rename-prefab --input I:\Wanderland\genshin-ts\backups\test1.gil --output renamed.gil --prefab-id 1086324737 --name "Renamed Prefab"
+.\build\Release\opengil.exe batch --input I:\Wanderland\genshin-ts\backups\test1.gil --output batched.gil --ops tests\fixtures\batch-model-rename.json
 ```
 
 All machine-facing command output is JSON on stdout. Logs and diagnostics go to

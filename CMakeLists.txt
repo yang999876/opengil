@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(opengil_core
   src/core/gil.cpp
+  src/core/json_value.cpp
   src/core/sha256.cpp
   src/core/wire.cpp
   src/ops/model_ops.cpp
@@ -32,6 +33,10 @@ add_executable(opengil_core_tests tests/unit/test_core.cpp)
 target_link_libraries(opengil_core_tests PRIVATE opengil_core)
 add_test(NAME opengil_core_tests COMMAND opengil_core_tests)
 
+add_executable(opengil_json_tests tests/unit/test_json_value.cpp)
+target_link_libraries(opengil_json_tests PRIVATE opengil_core)
+add_test(NAME opengil_json_tests COMMAND opengil_json_tests)
+
 add_executable(opengil_model_tests tests/unit/test_model_ops.cpp)
 target_link_libraries(opengil_model_tests PRIVATE opengil_core)
 target_compile_definitions(opengil_model_tests PRIVATE
@@ -48,4 +53,11 @@ add_test(NAME opengil_prefab_tests COMMAND opengil_prefab_tests)
 
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+
+add_test(NAME opengil_cli_batch_dry_run
+  COMMAND opengil batch
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-model-rename.json
+    --dry-run
 )

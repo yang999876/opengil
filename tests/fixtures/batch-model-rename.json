@@ -1,0 +1,14 @@
+{
+  "ops": [
+    {
+      "op": "set-model",
+      "prefabId": 1086324737,
+      "assetId": 20001220
+    },
+    {
+      "op": "rename-prefab",
+      "prefabId": 1086324737,
+      "name": "openGil Batch Rename"
+    }
+  ]
+}
