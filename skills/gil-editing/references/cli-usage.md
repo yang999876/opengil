@@ -34,6 +34,7 @@ opengil create-scene-object --input input.gil --output output.gil --asset-id 200
 opengil create-prefab --input input.gil --output output.gil --asset-id 20001220 --prefab-id 1077938002 --pos-x 7 --pos-y 8 --pos-z 9 --rot-x 10 --rot-y 11 --rot-z 12 --scale-x 2 --scale-y 2 --scale-z 2
 opengil create-prefab --input input.gil --output output.gil --asset-id 20001220 --prefab-id 1077938002 --template template.gil
 opengil create-scene-prefab-instance --input input.gil --output output.gil --prefab-id 1077938002 --asset-id 20001220 --object-id 1077938003 --pos-x 13 --pos-y 14 --pos-z 15 --rot-x 16 --rot-y 17 --rot-z 18 --scale-x 3 --scale-y 3 --scale-z 3
+opengil decoration add --input input.gil --output output.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --pos-x 0 --pos-y 1.9 --pos-z 0 --scale-x 0.3 --scale-y 0.04 --scale-z 0.3
 opengil set-scene-transform --input input.gil --output output.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --rot-x 10 --rot-y 11 --rot-z 12 --scale-x 2 --scale-y 2 --scale-z 2
 opengil set-preview-transform --input input.gil --output output.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --rot-x 4 --rot-y 5 --rot-z 6 --scale-x 1.5 --scale-y 1.5 --scale-z 1.5
 opengil custom-vars list --input input.gil --prefab-id 1077936130
@@ -50,6 +51,7 @@ opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id
 opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 80 --speed 20 --dry-run
 opengil create-prefab --input input.gil --asset-id 20001220 --prefab-id 1077938002 --dry-run
 opengil create-scene-prefab-instance --input input.gil --prefab-id 1077938002 --asset-id 20001220 --object-id 1077938003 --dry-run
+opengil decoration add --input input.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --dry-run
 opengil set-scene-transform --input input.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --dry-run
 opengil set-preview-transform --input input.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --dry-run
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
@@ -81,6 +83,11 @@ Object creation commands copy a reusable template entry, patch ids/assets, repla
 the full transform, append to `top4` or `top5`, and append `top6` mappings. Pass
 `--template template.gil` for prefab or scene-prefab-instance creation when the
 target asset needs a better observed template than the current file contains.
+
+`decoration add` appends prefab-side `top27.field1` decoration records, appends
+scene mirror `top27.field2` records for matching preview/scene entries in `top8`,
+and updates decoration reference lists in `top4` and `top8`. Pass a stable
+`--name`; the CLI does not invent editor display names for you.
 
 Batch `ops.json` may be either an array or an object with an `ops` array:
 
@@ -149,6 +156,16 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
       "prefabId": 1077938002,
       "assetId": 20001220,
       "objectId": 1077938003
+    },
+    {
+      "op": "decoration.add",
+      "prefabId": 1077936385,
+      "assetId": 20001220,
+      "name": "Deco",
+      "posY": 1.9,
+      "scaleX": 0.3,
+      "scaleY": 0.04,
+      "scaleZ": 0.3
     },
     {
       "op": "clone-prefab",

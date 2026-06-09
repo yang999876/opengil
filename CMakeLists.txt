@@ -12,6 +12,7 @@ add_library(opengil_core
   src/core/sha256.cpp
   src/core/wire.cpp
   src/ops/custom_vars_ops.cpp
+  src/ops/decoration_ops.cpp
   src/ops/model_ops.cpp
   src/ops/nodegraph_ops.cpp
   src/ops/object_ops.cpp
@@ -66,6 +67,10 @@ add_test(NAME opengil_projectile_tests COMMAND opengil_projectile_tests)
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
 add_test(NAME opengil_object_tests COMMAND opengil_object_tests)
+
+add_executable(opengil_decoration_tests tests/unit/test_decoration_ops.cpp)
+target_link_libraries(opengil_decoration_tests PRIVATE opengil_core)
+add_test(NAME opengil_decoration_tests COMMAND opengil_decoration_tests)
 
 add_executable(opengil_custom_vars_tests tests/unit/test_custom_vars_ops.cpp)
 target_link_libraries(opengil_custom_vars_tests PRIVATE opengil_core)
