@@ -5,7 +5,7 @@
 - Create scene object: copy a reusable `top5.field1` template, patch object id at `5.1.1`, asset refs at `5.1.2.1` and `5.1.8`, replace transform at `5.1.6.11`, append scene mapping `200 -> objectId` to category `3` in `top6`.
 - Create prefab: copy a reusable `top4.field1` template, patch prefab id at `4.1.1`, asset id at `4.1.2`, replace transform at `4.1.7.11`, append prefab mapping `100 -> prefabId` to categories `6` and `3` in `top6`.
 - Create scene prefab instance: copy a reusable `top5.field1` template, patch object id at `5.1.1`, prefab ref at `5.1.2.1`, asset id at `5.1.8`, replace transform at `5.1.6.11`, append scene mapping `200 -> objectId` to category `3` in `top6`.
-- Delete prefab: `top4 + top6 + top10 + top27`.
+- Delete prefab: remove `top4.field1` by prefab id, strip recursive `top6.field5` mappings for removed prefab/decorations, prune `top10` records that directly reference removed ids, and remove prefab-owned `top27.field1` records. Do not assume `top8` should change.
 - Add decoration: `top4 + top8 + top27`.
 - Add attachment point: `top4 + top8`.
 - Attach nodegraph: append reference payload to prefab `4.1.7.13`, scene `5.1.6.13`, preview `8.1.6.13`; do not edit `top10`.

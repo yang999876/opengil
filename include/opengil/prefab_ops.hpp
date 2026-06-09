@@ -48,6 +48,18 @@ struct PrefabCloneMutation {
   ClonePrefabSummary summary;
 };
 
+struct DeletePrefabSummary {
+  uint64_t prefab_id = 0;
+  std::vector<uint64_t> removed_decoration_ids;
+  std::vector<uint32_t> changed_top_fields;
+};
+
+struct PrefabDeleteMutation {
+  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> payload;
+  DeletePrefabSummary summary;
+};
+
 PrefabRenameMutation rename_prefab(const GilFile& file, uint64_t prefab_id, const std::string& new_name);
 std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary);
 
@@ -78,6 +90,9 @@ PrefabCloneMutation copy_prefab_to_tab_by_id(
     uint64_t target_tab_id,
     const std::optional<std::string>& new_prefab_name = std::nullopt,
     const ClonePrefabOptions& options = {});
+
+PrefabDeleteMutation delete_prefab(const GilFile& file, uint64_t prefab_id);
+std::string delete_prefab_summary_to_json(const DeletePrefabSummary& summary);
 
 std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary);
 std::string copy_prefab_summary_to_json(const ClonePrefabSummary& summary);

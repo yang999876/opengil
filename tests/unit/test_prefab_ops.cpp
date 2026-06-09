@@ -153,9 +153,14 @@ opengil::GilFile make_clone_synthetic_file() {
   const auto top27 = message({
       len_field(1, decoration_record(decoration_id, source_prefab_id)),
   });
+  const auto top10 = message({
+      len_field(1, message({varint_field(1, source_prefab_id)})),
+      len_field(1, message({varint_field(1, 999)})),
+  });
   const auto payload = message({
       len_field(4, top4),
       len_field(6, top6),
+      len_field(10, top10),
       len_field(27, top27),
   });
 
@@ -182,6 +187,12 @@ bool has_decoration_owner(const opengil::GilFile& file, uint64_t decoration_id, 
     }
   }
   return false;
+}
+
+size_t len_field_count(const opengil::GilFile& file, uint32_t top_field_number, uint32_t repeated_field_number) {
+  const auto top = opengil::top_level_data(file, top_field_number);
+  assert(top);
+  return opengil::len_fields(*top, repeated_field_number).size();
 }
 
 }  // namespace
@@ -263,6 +274,22 @@ int main() {
   }
   assert(found_copy);
   assert(has_decoration_owner(copied_file, 1002, 102));
+
+  const auto deleted = opengil::delete_prefab(clone_file, 101);
+  assert(deleted.summary.prefab_id == 101);
+  assert(deleted.summary.removed_decoration_ids.size() == 1);
+  assert(deleted.summary.removed_decoration_ids[0] == 1001);
+  assert(deleted.summary.changed_top_fields.size() == 4);
+
+  const auto deleted_file = load_mutation_as_file(deleted, "opengil-test-delete-prefab.gil");
+  assert(opengil::validate_gil(deleted_file).ok);
+  const auto remaining_prefabs = opengil::list_prefabs(deleted_file);
+  for (const auto& prefab : remaining_prefabs) {
+    assert(prefab.prefab_id != 101);
+  }
+  assert(opengil::list_prefab_tabs(deleted_file, 101).empty());
+  assert(!has_decoration_owner(deleted_file, 1001, 101));
+  assert(len_field_count(deleted_file, 10, 1) == 1);
 
   return 0;
 }

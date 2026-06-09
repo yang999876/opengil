@@ -622,6 +622,137 @@ std::vector<uint8_t> append_cloned_top27_items(
   return rebuild_message(fields);
 }
 
+std::vector<uint8_t> remove_prefab_from_top4(std::span<const uint8_t> top4, uint64_t prefab_id, bool& removed) {
+  auto fields = parse_owned_fields(top4);
+  std::vector<OwnedField> next;
+  const std::array<uint32_t, 1> id_path{1};
+  for (auto& field : fields) {
+    if (field.number == 1 &&
+        field.wire == 2 &&
+        read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), id_path) == prefab_id) {
+      removed = true;
+      continue;
+    }
+    next.push_back(std::move(field));
+  }
+  return rebuild_message(next);
+}
+
+std::vector<uint64_t> collect_top27_decoration_ids_for_prefab(std::span<const uint8_t> top27, uint64_t prefab_id) {
+  std::vector<uint64_t> ids;
+  const std::array<uint32_t, 1> id_path{1};
+  const std::array<uint32_t, 3> owner_path{4, 50, 502};
+  for (const auto& field : len_fields(top27, 1)) {
+    const auto item = field_data(top27, field);
+    if (read_varint_path(item, owner_path) != prefab_id) continue;
+    if (auto id = read_varint_path(item, id_path)) ids.push_back(*id);
+  }
+  return ids;
+}
+
+std::vector<uint8_t> remove_top27_entries_for_prefab(std::span<const uint8_t> top27, uint64_t prefab_id) {
+  auto fields = parse_owned_fields(top27);
+  std::vector<OwnedField> next;
+  const std::array<uint32_t, 3> owner_path{4, 50, 502};
+  for (auto& field : fields) {
+    if (field.number == 1 &&
+        field.wire == 2 &&
+        read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), owner_path) == prefab_id) {
+      continue;
+    }
+    next.push_back(std::move(field));
+  }
+  return rebuild_message(next);
+}
+
+bool target_ids_contain(const std::set<uint64_t>& target_ids, std::optional<uint64_t> value) {
+  return value && target_ids.contains(*value);
+}
+
+bool has_direct_varint_value(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
+  const auto fields = parse_owned_fields(message);
+  for (const auto& field : fields) {
+    if (field.wire == 0 && target_ids.contains(field.varint)) return true;
+  }
+  return false;
+}
+
+struct RecursivePatch {
+  std::vector<uint8_t> data;
+  bool changed = false;
+};
+
+RecursivePatch strip_mappings_recursive(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
+  auto fields = parse_owned_fields(message);
+  std::vector<OwnedField> next;
+  bool changed = false;
+  const std::array<uint32_t, 1> mapped_id_path{2};
+
+  for (auto& field : fields) {
+    if (field.number == 5 &&
+        field.wire == 2 &&
+        target_ids_contain(target_ids, read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), mapped_id_path))) {
+      changed = true;
+      continue;
+    }
+
+    if (field.wire == 2) {
+      auto nested = strip_mappings_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids);
+      if (nested.changed) {
+        field.data = std::move(nested.data);
+        changed = true;
+      }
+    }
+    next.push_back(std::move(field));
+  }
+
+  RecursivePatch patch;
+  patch.changed = changed;
+  patch.data = changed ? rebuild_message(next) : std::vector<uint8_t>(message.begin(), message.end());
+  return patch;
+}
+
+RecursivePatch prune_field10_recursive(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
+  auto fields = parse_owned_fields(message);
+  std::vector<OwnedField> next;
+  bool changed = false;
+
+  for (auto& field : fields) {
+    if (field.wire != 2) {
+      next.push_back(std::move(field));
+      continue;
+    }
+
+    auto nested = prune_field10_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids);
+    if (nested.changed) {
+      field.data = std::move(nested.data);
+      changed = true;
+    }
+
+    if (has_direct_varint_value(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids)) {
+      changed = true;
+      continue;
+    }
+    next.push_back(std::move(field));
+  }
+
+  RecursivePatch patch;
+  patch.changed = changed;
+  patch.data = changed ? rebuild_message(next) : std::vector<uint8_t>(message.begin(), message.end());
+  return patch;
+}
+
+void replace_changed_top_field(
+    std::vector<uint8_t>& payload_bytes,
+    uint32_t top_field_number,
+    const std::vector<uint8_t>& before,
+    const std::vector<uint8_t>& after,
+    std::vector<uint32_t>& changed_top_fields) {
+  if (before == after) return;
+  payload_bytes = replace_top_level_field_data(payload_bytes, top_field_number, after);
+  changed_top_fields.push_back(top_field_number);
+}
+
 }  // namespace
 
 PrefabRenameMutation rename_prefab(const GilFile& file, uint64_t prefab_id, const std::string& new_name) {
@@ -802,6 +933,46 @@ PrefabCloneMutation copy_prefab_to_tab_by_id(
   return clone_prefab_into_tab_by_id(file, source_prefab_id, target_tab_id, resolved_name, options);
 }
 
+PrefabDeleteMutation delete_prefab(const GilFile& file, uint64_t prefab_id) {
+  const auto top4_span = top_level_data(file, 4);
+  if (!top4_span) throw std::runtime_error("top-level field 4 not found");
+
+  std::vector<uint8_t> next_payload(payload(file).begin(), payload(file).end());
+  DeletePrefabSummary summary;
+  summary.prefab_id = prefab_id;
+
+  const std::vector<uint8_t> top4(top4_span->begin(), top4_span->end());
+  bool removed_top4 = false;
+  const auto next_top4 = remove_prefab_from_top4(top4, prefab_id, removed_top4);
+  if (!removed_top4) throw std::runtime_error("prefab id not found");
+  replace_changed_top_field(next_payload, 4, top4, next_top4, summary.changed_top_fields);
+
+  if (const auto top27 = top_level_data_from_payload(next_payload, 27)) {
+    summary.removed_decoration_ids = collect_top27_decoration_ids_for_prefab(*top27, prefab_id);
+    const auto next_top27 = remove_top27_entries_for_prefab(*top27, prefab_id);
+    replace_changed_top_field(next_payload, 27, *top27, next_top27, summary.changed_top_fields);
+  }
+
+  std::set<uint64_t> target_ids{prefab_id};
+  for (uint64_t decoration_id : summary.removed_decoration_ids) target_ids.insert(decoration_id);
+
+  if (const auto top6 = top_level_data_from_payload(next_payload, 6)) {
+    const auto patch = strip_mappings_recursive(*top6, target_ids);
+    replace_changed_top_field(next_payload, 6, *top6, patch.data, summary.changed_top_fields);
+  }
+
+  if (const auto top10 = top_level_data_from_payload(next_payload, 10)) {
+    const auto patch = prune_field10_recursive(*top10, target_ids);
+    replace_changed_top_field(next_payload, 10, *top10, patch.data, summary.changed_top_fields);
+  }
+
+  PrefabDeleteMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
 std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
   std::ostringstream out;
   out << "{"
@@ -809,6 +980,25 @@ std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
       << "\"beforeName\":" << json::quote(summary.before_name) << ","
       << "\"afterName\":" << json::quote(summary.after_name) << ","
       << "\"changedTopFields\":[";
+  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
+    if (i) out << ",";
+    out << summary.changed_top_fields[i];
+  }
+  out << "]}";
+  return out.str();
+}
+
+std::string delete_prefab_summary_to_json(const DeletePrefabSummary& summary) {
+  std::ostringstream out;
+  out << "{"
+      << "\"kind\":\"deletePrefab\","
+      << "\"prefabId\":" << summary.prefab_id << ","
+      << "\"removedDecorationIds\":[";
+  for (size_t i = 0; i < summary.removed_decoration_ids.size(); ++i) {
+    if (i) out << ",";
+    out << summary.removed_decoration_ids[i];
+  }
+  out << "],\"changedTopFields\":[";
   for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
     if (i) out << ",";
     out << summary.changed_top_fields[i];

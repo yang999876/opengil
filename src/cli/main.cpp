@@ -512,6 +512,8 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
     } else if (op.op == "rename-prefab") {
       op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
+    } else if (op.op == "delete-prefab") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
     } else if (op.op == "attach-nodegraph") {
       op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.nodegraph_id = require_json_u64(item, {"nodegraphId", "nodegraph-id"}, index);
@@ -785,6 +787,33 @@ std::string handle_rename_prefab(const Args& args) {
   return json;
 }
 
+std::string handle_delete_prefab(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = opengil::delete_prefab(file, prefab_id);
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::delete_prefab_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 opengil::ClonePrefabOptions clone_options_from_args(const Args& args) {
   opengil::ClonePrefabOptions options;
   options.new_prefab_id = optional_u64(args, "new-prefab-id");
@@ -1023,6 +1052,11 @@ std::string handle_batch(const Args& args) {
         result_json = opengil::rename_prefab_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
+      } else if (op.op == "delete-prefab") {
+        const auto mutation = opengil::delete_prefab(current, op.prefab_id);
+        result_json = opengil::delete_prefab_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
       } else if (op.op == "attach-nodegraph") {
         const auto mutation = opengil::attach_nodegraph_to_prefab(current, op.prefab_id, *op.nodegraph_id);
         result_json = opengil::attach_nodegraph_summary_to_json(mutation.summary);
@@ -1253,6 +1287,8 @@ int main(int argc, char** argv) {
       output = handle_set_model(args, true);
     } else if (args.command == "rename-prefab") {
       output = handle_rename_prefab(args);
+    } else if (args.command == "delete-prefab") {
+      output = handle_delete_prefab(args);
     } else if (args.command == "clone-prefab") {
       output = handle_clone_prefab(args);
     } else if (args.command == "copy-prefab-to-tab") {

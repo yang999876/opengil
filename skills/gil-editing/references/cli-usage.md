@@ -22,6 +22,7 @@ Implemented write commands:
 opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 --asset-id 20001220
 opengil set-empty-model --input input.gil --output output.gil --prefab-id 1077936130
 opengil rename-prefab --input input.gil --output output.gil --prefab-id 1077936130 --name "Renamed Prefab"
+opengil delete-prefab --input input.gil --output output.gil --prefab-id 1077936130
 opengil clone-prefab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab"
 opengil copy-prefab-to-tab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6
 opengil copy-prefab-to-tab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6 --name "Copied Prefab"
@@ -42,6 +43,7 @@ opengil custom-vars copy-all --input input.gil --output output.gil --from-prefab
 opengil custom-vars sync-tab --input input.gil --output output.gil --source-prefab-id 1077936340 --tab-id 6
 opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
 opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed Prefab" --dry-run
+opengil delete-prefab --input input.gil --prefab-id 1077936130 --dry-run
 opengil clone-prefab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab" --dry-run
 opengil copy-prefab-to-tab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --dry-run
 opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id 1073741913 --dry-run
@@ -66,6 +68,11 @@ decoration records when the source has them. Prefer `--tab-id` over `--tab`.
 `copy-prefab-to-tab` uses the same core behavior, but `--name` is optional and
 defaults to the source prefab name plus `-copy`.
 
+`delete-prefab` removes the prefab entry from `top4`, strips `top6` mappings,
+removes prefab-owned `top27.field1` decoration records, and prunes `top10`
+records that directly reference the removed prefab or decoration ids. It does
+not default to deleting `top8`.
+
 Transform writes replace the full transform message at `5.1.6.11` or `8.1.6.11`.
 Unspecified position/rotation values default to `0`; unspecified scale values
 default to `1`. Pass all nine values when preserving existing axes matters.
@@ -89,6 +96,10 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
       "op": "rename-prefab",
       "prefabId": 1077936130,
       "name": "Renamed Prefab"
+    },
+    {
+      "op": "delete-prefab",
+      "prefabId": 1077936130
     },
     {
       "op": "attach-nodegraph",
