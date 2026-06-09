@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "opengil/attachment_ops.hpp"
 #include "opengil/gil.hpp"
 #include "opengil/custom_vars_ops.hpp"
 #include "opengil/decoration_ops.hpp"
@@ -79,6 +80,7 @@ struct BatchOp {
   std::optional<double> scale_y;
   std::optional<double> scale_z;
   std::string name;
+  std::string display_name;
   std::string type;
   std::string tab;
   std::string template_path;
@@ -587,6 +589,12 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
       op.name = require_json_string(item, {"name"}, index);
       parse_transform_fields();
+    } else if (op.op == "attachment.add") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
+      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
+      op.name = require_json_string(item, {"name"}, index);
+      op.display_name = require_json_string(item, {"displayName", "display-name"}, index);
+      parse_transform_fields();
     } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
       op.object_id = require_json_u64(item, {"objectId", "object-id"}, index);
       parse_transform_fields();
@@ -604,6 +612,7 @@ void add_changed_fields(std::set<uint32_t>& changed, const std::vector<uint32_t>
 }
 
 opengil::DecorationSpec decoration_spec_from_args(const Args& args);
+opengil::AttachmentPointSpec attachment_spec_from_args(const Args& args);
 
 std::string handle_set_model(const Args& args, bool empty_model) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
@@ -761,6 +770,43 @@ std::string handle_decoration(const Args& args) {
     result += ",\"dryRun\":true}";
   }
   const auto json = envelope("decoration.add", true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_attachment(const Args& args) {
+  if (args.positional.empty()) {
+    throw CliError("USAGE", "attachment requires a subcommand: add", EXIT_USAGE);
+  }
+  const std::string subcommand = args.positional[0];
+  if (subcommand != "add") {
+    throw CliError("USAGE", "unsupported attachment subcommand: " + subcommand, EXIT_USAGE);
+  }
+
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const auto object_id = optional_u64(args, "object-id");
+  const auto spec = attachment_spec_from_args(args);
+
+  const auto mutation = opengil::add_attachment_points(file, prefab_id, object_id, {spec});
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::attachment_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope("attachment.add", true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -939,6 +985,31 @@ opengil::DecorationSpec decoration_spec_from_batch_op(const BatchOp& op) {
   spec.name = op.name;
   spec.transform = transform_from_batch_op(op);
   return spec;
+}
+
+opengil::AttachmentPointSpec attachment_spec_from_values(
+    const std::string& name,
+    const std::string& display_name,
+    const opengil::Transform& transform) {
+  opengil::AttachmentPointSpec spec;
+  spec.name = name;
+  spec.display_name = display_name;
+  spec.x = transform.position.x;
+  spec.y = transform.position.y;
+  spec.rot_x = transform.rotation.x;
+  spec.rot_y = transform.rotation.y;
+  return spec;
+}
+
+opengil::AttachmentPointSpec attachment_spec_from_args(const Args& args) {
+  return attachment_spec_from_values(
+      require_value(args, "name"),
+      require_value(args, "display-name"),
+      transform_from_args(args));
+}
+
+opengil::AttachmentPointSpec attachment_spec_from_batch_op(const BatchOp& op) {
+  return attachment_spec_from_values(op.name, op.display_name, transform_from_batch_op(op));
 }
 
 std::string handle_create_object(const Args& args) {
@@ -1212,6 +1283,12 @@ std::string handle_batch(const Args& args) {
         result_json = opengil::decoration_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
+      } else if (op.op == "attachment.add") {
+        const auto spec = attachment_spec_from_batch_op(op);
+        const auto mutation = opengil::add_attachment_points(current, op.prefab_id, op.requested_object_id, {spec});
+        result_json = opengil::attachment_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
       } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
         const auto transform = transform_from_batch_op(op);
         const auto mutation = op.op == "set-preview-transform"
@@ -1377,6 +1454,8 @@ int main(int argc, char** argv) {
       output = handle_custom_vars(args);
     } else if (args.command == "decoration") {
       output = handle_decoration(args);
+    } else if (args.command == "attachment") {
+      output = handle_attachment(args);
     } else if (args.command == "batch") {
       output = handle_batch(args);
     } else {

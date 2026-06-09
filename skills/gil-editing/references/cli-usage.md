@@ -35,6 +35,7 @@ opengil create-prefab --input input.gil --output output.gil --asset-id 20001220 
 opengil create-prefab --input input.gil --output output.gil --asset-id 20001220 --prefab-id 1077938002 --template template.gil
 opengil create-scene-prefab-instance --input input.gil --output output.gil --prefab-id 1077938002 --asset-id 20001220 --object-id 1077938003 --pos-x 13 --pos-y 14 --pos-z 15 --rot-x 16 --rot-y 17 --rot-z 18 --scale-x 3 --scale-y 3 --scale-z 3
 opengil decoration add --input input.gil --output output.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --pos-x 0 --pos-y 1.9 --pos-z 0 --scale-x 0.3 --scale-y 0.04 --scale-z 0.3
+opengil attachment add --input input.gil --output output.gil --prefab-id 1077936385 --name Hand --display-name "Hand Point" --pos-x 0.48 --pos-y 1.52 --rot-x -37.9 --rot-y 81.9
 opengil set-scene-transform --input input.gil --output output.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --rot-x 10 --rot-y 11 --rot-z 12 --scale-x 2 --scale-y 2 --scale-z 2
 opengil set-preview-transform --input input.gil --output output.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --rot-x 4 --rot-y 5 --rot-z 6 --scale-x 1.5 --scale-y 1.5 --scale-z 1.5
 opengil custom-vars list --input input.gil --prefab-id 1077936130
@@ -52,6 +53,7 @@ opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 8
 opengil create-prefab --input input.gil --asset-id 20001220 --prefab-id 1077938002 --dry-run
 opengil create-scene-prefab-instance --input input.gil --prefab-id 1077938002 --asset-id 20001220 --object-id 1077938003 --dry-run
 opengil decoration add --input input.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --dry-run
+opengil attachment add --input input.gil --prefab-id 1077936385 --name Hand --display-name "Hand Point" --dry-run
 opengil set-scene-transform --input input.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --dry-run
 opengil set-preview-transform --input input.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --dry-run
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
@@ -88,6 +90,10 @@ target asset needs a better observed template than the current file contains.
 scene mirror `top27.field2` records for matching preview/scene entries in `top8`,
 and updates decoration reference lists in `top4` and `top8`. Pass a stable
 `--name`; the CLI does not invent editor display names for you.
+
+`attachment add` writes custom attachment point definitions and indexes into
+prefab `top4` and matching `top8` scene entries. Use `--object-id` to target one
+scene entry; omit it to update all scene entries that reference the prefab.
 
 Batch `ops.json` may be either an array or an object with an `ops` array:
 
@@ -166,6 +172,16 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
       "scaleX": 0.3,
       "scaleY": 0.04,
       "scaleZ": 0.3
+    },
+    {
+      "op": "attachment.add",
+      "prefabId": 1077936385,
+      "name": "Hand",
+      "displayName": "Hand Point",
+      "posX": 0.48,
+      "posY": 1.52,
+      "rotX": -37.9,
+      "rotY": 81.9
     },
     {
       "op": "clone-prefab",
