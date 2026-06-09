@@ -28,6 +28,8 @@ The CLI target is `opengil`.
 .\build\Release\opengil.exe batch --input I:\Wanderland\genshin-ts\backups\test1.gil --output batched.gil --ops tests\fixtures\batch-model-rename.json
 .\build\Release\opengil.exe attach-nodegraph --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output attached.gil --prefab-id 1086324737 --nodegraph-id 1073741913
 .\build\Release\opengil.exe set-projectile-motion --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output projectile.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20
+.\build\Release\opengil.exe set-scene-transform --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output scene-transform.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --rot-x 10 --rot-y 11 --rot-z 12 --scale-x 2 --scale-y 2 --scale-z 2
+.\build\Release\opengil.exe set-preview-transform --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output preview-transform.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --rot-x 4 --rot-y 5 --rot-z 6 --scale-x 1.5 --scale-y 1.5 --scale-z 1.5
 .\build\Release\opengil.exe custom-vars list --input I:\Wanderland\genshin-ts\backups\test1.gil --prefab-id 1086324737
 .\build\Release\opengil.exe custom-vars add --input I:\Wanderland\genshin-ts\backups\test1.gil --output custom.gil --prefab-id 1086324737 --name openGilVar --type str
 .\build\Release\opengil.exe custom-vars sync-tab --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output synced.gil --source-prefab-id 1077936340 --tab-id 6

@@ -17,6 +17,7 @@
 #include "opengil/json_value.hpp"
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
+#include "opengil/object_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
@@ -51,6 +52,7 @@ struct CliError : std::runtime_error {
 struct BatchOp {
   std::string op;
   uint64_t prefab_id = 0;
+  uint64_t object_id = 0;
   uint64_t source_prefab_id = 0;
   uint64_t target_prefab_id = 0;
   std::optional<uint64_t> asset_id;
@@ -65,6 +67,15 @@ struct BatchOp {
   std::optional<double> gravity;
   std::optional<double> preview_x_step;
   std::optional<double> preview_z_step;
+  std::optional<double> pos_x;
+  std::optional<double> pos_y;
+  std::optional<double> pos_z;
+  std::optional<double> rot_x;
+  std::optional<double> rot_y;
+  std::optional<double> rot_z;
+  std::optional<double> scale_x;
+  std::optional<double> scale_y;
+  std::optional<double> scale_z;
   std::string name;
   std::string type;
   std::string tab;
@@ -543,6 +554,17 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       if (!op.tab_id && op.tab.empty()) {
         throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
       }
+    } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
+      op.object_id = require_json_u64(item, {"objectId", "object-id"}, index);
+      op.pos_x = optional_json_number(item, {"posX", "pos-x", "positionX", "position-x"});
+      op.pos_y = optional_json_number(item, {"posY", "pos-y", "positionY", "position-y"});
+      op.pos_z = optional_json_number(item, {"posZ", "pos-z", "positionZ", "position-z"});
+      op.rot_x = optional_json_number(item, {"rotX", "rot-x", "rotationX", "rotation-x"});
+      op.rot_y = optional_json_number(item, {"rotY", "rot-y", "rotationY", "rotation-y"});
+      op.rot_z = optional_json_number(item, {"rotZ", "rot-z", "rotationZ", "rotation-z"});
+      op.scale_x = optional_json_number(item, {"scaleX", "scale-x"});
+      op.scale_y = optional_json_number(item, {"scaleY", "scale-y"});
+      op.scale_z = optional_json_number(item, {"scaleZ", "scale-z"});
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -764,6 +786,55 @@ opengil::ClonePrefabOptions clone_options_from_batch_op(const BatchOp& op) {
   return options;
 }
 
+opengil::Transform transform_from_values(
+    std::optional<double> pos_x,
+    std::optional<double> pos_y,
+    std::optional<double> pos_z,
+    std::optional<double> rot_x,
+    std::optional<double> rot_y,
+    std::optional<double> rot_z,
+    std::optional<double> scale_x,
+    std::optional<double> scale_y,
+    std::optional<double> scale_z) {
+  opengil::Transform transform;
+  if (pos_x) transform.position.x = *pos_x;
+  if (pos_y) transform.position.y = *pos_y;
+  if (pos_z) transform.position.z = *pos_z;
+  if (rot_x) transform.rotation.x = *rot_x;
+  if (rot_y) transform.rotation.y = *rot_y;
+  if (rot_z) transform.rotation.z = *rot_z;
+  if (scale_x) transform.scale.x = *scale_x;
+  if (scale_y) transform.scale.y = *scale_y;
+  if (scale_z) transform.scale.z = *scale_z;
+  return transform;
+}
+
+opengil::Transform transform_from_args(const Args& args) {
+  return transform_from_values(
+      optional_double(args, "pos-x"),
+      optional_double(args, "pos-y"),
+      optional_double(args, "pos-z"),
+      optional_double(args, "rot-x"),
+      optional_double(args, "rot-y"),
+      optional_double(args, "rot-z"),
+      optional_double(args, "scale-x"),
+      optional_double(args, "scale-y"),
+      optional_double(args, "scale-z"));
+}
+
+opengil::Transform transform_from_batch_op(const BatchOp& op) {
+  return transform_from_values(
+      op.pos_x,
+      op.pos_y,
+      op.pos_z,
+      op.rot_x,
+      op.rot_y,
+      op.rot_z,
+      op.scale_x,
+      op.scale_y,
+      op.scale_z);
+}
+
 std::string handle_clone_prefab(const Args& args) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
@@ -790,6 +861,37 @@ std::string handle_clone_prefab(const Args& args) {
   }
 
   std::string result = opengil::clone_prefab_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_set_transform(const Args& args, bool preview_space) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t object_id = require_u64(args, "object-id");
+  const auto transform = transform_from_args(args);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = preview_space
+      ? opengil::set_preview_transform(file, object_id, transform)
+      : opengil::set_scene_transform(file, object_id, transform);
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = mutation.result_json;
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
@@ -872,6 +974,14 @@ std::string handle_batch(const Args& args) {
             : opengil::clone_prefab_into_tab(current, op.source_prefab_id, op.tab, op.name, options);
         result_json = opengil::clone_prefab_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
+        const auto transform = transform_from_batch_op(op);
+        const auto mutation = op.op == "set-preview-transform"
+            ? opengil::set_preview_transform(current, op.object_id, transform)
+            : opengil::set_scene_transform(current, op.object_id, transform);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
         final_bytes = mutation.bytes;
       }
 
@@ -1008,6 +1118,10 @@ int main(int argc, char** argv) {
       output = handle_rename_prefab(args);
     } else if (args.command == "clone-prefab") {
       output = handle_clone_prefab(args);
+    } else if (args.command == "set-scene-transform") {
+      output = handle_set_transform(args, false);
+    } else if (args.command == "set-preview-transform") {
+      output = handle_set_transform(args, true);
     } else if (args.command == "attach-nodegraph") {
       output = handle_attach_nodegraph(args, false);
     } else if (args.command == "attach-all-nodegraphs") {

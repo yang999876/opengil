@@ -27,6 +27,8 @@ opengil attach-nodegraph --input input.gil --output output.gil --prefab-id 10779
 opengil attach-all-nodegraphs --input input.gil --output output.gil --prefab-id 1077936130
 opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20
 opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --x 3.47 --y 19.70 --gravity 20
+opengil set-scene-transform --input input.gil --output output.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --rot-x 10 --rot-y 11 --rot-z 12 --scale-x 2 --scale-y 2 --scale-z 2
+opengil set-preview-transform --input input.gil --output output.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --rot-x 4 --rot-y 5 --rot-z 6 --scale-x 1.5 --scale-y 1.5 --scale-z 1.5
 opengil custom-vars list --input input.gil --prefab-id 1077936130
 opengil custom-vars add --input input.gil --output output.gil --prefab-id 1077936130 --name openGilVar --type str
 opengil custom-vars remove --input input.gil --output output.gil --prefab-id 1077936130 --name openGilVar
@@ -37,6 +39,8 @@ opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed P
 opengil clone-prefab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab" --dry-run
 opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id 1073741913 --dry-run
 opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 80 --speed 20 --dry-run
+opengil set-scene-transform --input input.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --dry-run
+opengil set-preview-transform --input input.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --dry-run
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
 opengil batch --input input.gil --output output.gil --ops ops.json
 opengil batch --input input.gil --ops ops.json --dry-run
@@ -50,6 +54,10 @@ Use `--tab-id` instead of `--tab` for non-ASCII tab names on Windows shells.
 mapping to the target child tab in `top6`, appends the prefab to the unclassified
 prefab mapping, offsets the preview position, and clones prefab-side `top27`
 decoration records when the source has them. Prefer `--tab-id` over `--tab`.
+
+Transform writes replace the full transform message at `5.1.6.11` or `8.1.6.11`.
+Unspecified position/rotation values default to `0`; unspecified scale values
+default to `1`. Pass all nine values when preserving existing axes matters.
 
 Batch `ops.json` may be either an array or an object with an `ops` array:
 
@@ -81,6 +89,19 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
     {
       "op": "set-empty-model",
       "prefabId": 1077936130
+    },
+    {
+      "op": "set-scene-transform",
+      "objectId": 1086324737,
+      "posX": 7,
+      "posY": 8,
+      "posZ": 9,
+      "rotX": 10,
+      "rotY": 11,
+      "rotZ": 12,
+      "scaleX": 2,
+      "scaleY": 2,
+      "scaleZ": 2
     },
     {
       "op": "clone-prefab",
