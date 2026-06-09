@@ -22,8 +22,8 @@ The CLI target is `opengil`.
 .\build\Release\opengil.exe --version
 .\build\Release\opengil.exe inspect --input I:\Wanderland\genshin-ts\backups\test1.gil
 .\build\Release\opengil.exe list-prefabs --input I:\Wanderland\genshin-ts\backups\test1.gil
+.\build\Release\opengil.exe set-model --input I:\Wanderland\genshin-ts\backups\test1.gil --output out.gil --prefab-id 1086324737 --asset-id 20001220
 ```
 
 All machine-facing command output is JSON on stdout. Logs and diagnostics go to
 stderr.
-

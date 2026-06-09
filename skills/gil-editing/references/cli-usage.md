@@ -16,5 +16,12 @@ opengil list-nodegraphs --input test.gil
 opengil get-model --input test.gil --prefab-id 1077936130
 ```
 
-Planned write commands return `NOT_IMPLEMENTED` until their milestone lands.
+Implemented model write commands:
 
+```powershell
+opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 --asset-id 20001220
+opengil set-empty-model --input input.gil --output output.gil --prefab-id 1077936130
+opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
+```
+
+Other planned write commands return `NOT_IMPLEMENTED` until their milestone lands.

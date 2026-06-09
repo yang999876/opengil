@@ -1,11 +1,23 @@
 #include "opengil/gil.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
 #include "opengil/sha256.hpp"
 
 namespace opengil {
+
+namespace {
+
+void write_u32_be(std::vector<uint8_t>& bytes, size_t offset, uint32_t value) {
+  bytes[offset] = static_cast<uint8_t>((value >> 24) & 0xff);
+  bytes[offset + 1] = static_cast<uint8_t>((value >> 16) & 0xff);
+  bytes[offset + 2] = static_cast<uint8_t>((value >> 8) & 0xff);
+  bytes[offset + 3] = static_cast<uint8_t>(value & 0xff);
+}
+
+}  // namespace
 
 uint32_t read_u32_be(std::span<const uint8_t> bytes, size_t offset) {
   if (offset + 4 > bytes.size()) {
@@ -110,6 +122,55 @@ ValidationResult validate_gil(const GilFile& file) {
   return result;
 }
 
+std::vector<uint8_t> build_gil_bytes(const GilHeader& header, std::span<const uint8_t> payload_bytes) {
+  std::vector<uint8_t> bytes(payload_bytes.size() + 24);
+  write_u32_be(bytes, 0, static_cast<uint32_t>(payload_bytes.size() + 20));
+  write_u32_be(bytes, 4, header.schema);
+  write_u32_be(bytes, 8, header.head_tag);
+  write_u32_be(bytes, 12, header.file_type);
+  write_u32_be(bytes, 16, static_cast<uint32_t>(payload_bytes.size()));
+  std::copy(payload_bytes.begin(), payload_bytes.end(), bytes.begin() + 20);
+  write_u32_be(bytes, bytes.size() - 4, header.tail_tag);
+  return bytes;
+}
+
+void save_gil_file(const std::filesystem::path& path, const GilHeader& header, std::span<const uint8_t> payload_bytes) {
+  const auto bytes = build_gil_bytes(header, payload_bytes);
+  if (!path.parent_path().empty()) {
+    std::filesystem::create_directories(path.parent_path());
+  }
+  std::ofstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw std::runtime_error("failed to open output file: " + path.string());
+  }
+  stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  if (!stream) {
+    throw std::runtime_error("failed to write output file: " + path.string());
+  }
+}
+
+std::vector<uint8_t> replace_top_level_field_data(
+    std::span<const uint8_t> payload_bytes,
+    uint32_t field_number,
+    std::span<const uint8_t> new_data) {
+  std::string error;
+  auto fields = parse_owned_fields(payload_bytes, &error);
+  if (!error.empty()) {
+    throw std::runtime_error("failed to parse payload for replacement: " + error);
+  }
+  bool changed = false;
+  for (auto& field : fields) {
+    if (!changed && field.number == field_number && field.wire == 2) {
+      field.data.assign(new_data.begin(), new_data.end());
+      changed = true;
+    }
+  }
+  if (!changed) {
+    throw std::runtime_error("top-level field not found for replacement");
+  }
+  return rebuild_message(fields);
+}
+
 std::string file_sha256(const GilFile& file) {
   return sha256_hex(std::span<const uint8_t>(file.bytes.data(), file.bytes.size()));
 }
@@ -119,4 +180,3 @@ std::string bytes_sha256(std::span<const uint8_t> bytes) {
 }
 
 }  // namespace opengil
-

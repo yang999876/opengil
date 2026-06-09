@@ -39,8 +39,13 @@ std::optional<std::span<const uint8_t>> top_level_data(const GilFile& file, uint
 ValidationResult validate_gil(const GilFile& file);
 
 uint32_t read_u32_be(std::span<const uint8_t> bytes, size_t offset);
+std::vector<uint8_t> build_gil_bytes(const GilHeader& header, std::span<const uint8_t> payload);
+void save_gil_file(const std::filesystem::path& path, const GilHeader& header, std::span<const uint8_t> payload);
+std::vector<uint8_t> replace_top_level_field_data(
+    std::span<const uint8_t> payload,
+    uint32_t field_number,
+    std::span<const uint8_t> new_data);
 std::string file_sha256(const GilFile& file);
 std::string bytes_sha256(std::span<const uint8_t> bytes);
 
 }  // namespace opengil
-

@@ -10,6 +10,7 @@
 
 #include "opengil/gil.hpp"
 #include "opengil/json.hpp"
+#include "opengil/model_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/version.hpp"
 
@@ -109,6 +110,12 @@ std::string file_input_json(const GilFile& file) {
 
 std::string null_input_json() {
   return "null";
+}
+
+std::string output_file_json(const std::filesystem::path& path, std::span<const uint8_t> bytes) {
+  return "{\"path\":" + opengil::json::quote(path.string()) +
+         ",\"sha256\":" + opengil::json::quote(opengil::bytes_sha256(bytes)) +
+         "}";
 }
 
 std::string envelope(
@@ -252,6 +259,48 @@ std::string not_implemented_result(const Args& args) {
       {error_json("NOT_IMPLEMENTED", "this command is planned but not implemented in the current openGil milestone")});
 }
 
+std::filesystem::path resolve_write_output_path(const Args& args, const std::filesystem::path& input_path) {
+  if (args.flags.contains("in-place")) return input_path;
+  const auto output = value_or_empty(args, "output");
+  if (output.empty() && !args.flags.contains("dry-run")) {
+    throw CliError("USAGE", "write commands require --output unless --dry-run or --in-place is used", EXIT_USAGE);
+  }
+  return output.empty() ? std::filesystem::path{} : std::filesystem::path(output);
+}
+
+std::string handle_set_model(const Args& args, bool empty_model) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const uint64_t model_asset_id = empty_model ? opengil::EMPTY_MODEL_ASSET_ID : require_u64(args, "asset-id");
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = opengil::set_prefab_model_asset_id(file, prefab_id, model_asset_id);
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    const auto parent = output_path.parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent);
+    std::ofstream stream(output_path, std::ios::binary);
+    if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + output_path.string(), EXIT_WRITE);
+    stream.write(reinterpret_cast<const char*>(mutation.bytes.data()), static_cast<std::streamsize>(mutation.bytes.size()));
+    if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + output_path.string(), EXIT_WRITE);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::set_model_summary_to_json(mutation.model_summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_with_input(const Args& args) {
   const auto input_path = require_value(args, "input");
   GilFile file = opengil::load_gil_file(input_path);
@@ -326,8 +375,12 @@ int main(int argc, char** argv) {
     }
 
     std::string output;
-    if (args.command == "diff-summary") {
+  if (args.command == "diff-summary") {
       output = handle_diff_summary(args);
+    } else if (args.command == "set-model") {
+      output = handle_set_model(args, false);
+    } else if (args.command == "set-empty-model") {
+      output = handle_set_model(args, true);
     } else {
       output = handle_with_input(args);
     }
@@ -357,4 +410,3 @@ int main(int argc, char** argv) {
     return EXIT_PARSE;
   }
 }
-

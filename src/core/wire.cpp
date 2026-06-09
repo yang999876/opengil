@@ -40,6 +40,26 @@ std::vector<uint8_t> encode_len_field(uint32_t field_number, std::span<const uin
   return out;
 }
 
+std::vector<uint8_t> encode_field(const OwnedField& field) {
+  std::vector<uint8_t> out = encode_key(field.number, field.wire);
+  if (field.wire == 0) {
+    auto value = encode_varint(field.varint);
+    out.insert(out.end(), value.begin(), value.end());
+    return out;
+  }
+  if (field.wire == 2) {
+    auto len = encode_varint(field.data.size());
+    out.insert(out.end(), len.begin(), len.end());
+    out.insert(out.end(), field.data.begin(), field.data.end());
+    return out;
+  }
+  if (field.wire == 1 || field.wire == 5) {
+    out.insert(out.end(), field.data.begin(), field.data.end());
+    return out;
+  }
+  return out;
+}
+
 bool parse_fields(std::span<const uint8_t> bytes, std::vector<Field>& out, std::string* error) {
   size_t offset = 0;
   while (offset < bytes.size()) {
@@ -122,6 +142,36 @@ bool parse_fields(std::span<const uint8_t> bytes, std::vector<Field>& out, std::
   }
 
   return true;
+}
+
+OwnedField clone_owned_field(std::span<const uint8_t> message, const Field& field) {
+  OwnedField out;
+  out.number = field.number;
+  out.wire = field.wire;
+  out.varint = field.varint;
+  if (field.wire == 1 || field.wire == 2 || field.wire == 5) {
+    const auto data = field_data(message, field);
+    out.data.assign(data.begin(), data.end());
+  }
+  return out;
+}
+
+std::vector<OwnedField> parse_owned_fields(std::span<const uint8_t> bytes, std::string* error) {
+  std::vector<Field> fields;
+  if (!parse_fields(bytes, fields, error)) return {};
+  std::vector<OwnedField> out;
+  out.reserve(fields.size());
+  for (const auto& field : fields) out.push_back(clone_owned_field(bytes, field));
+  return out;
+}
+
+std::vector<uint8_t> rebuild_message(const std::vector<OwnedField>& fields) {
+  std::vector<uint8_t> out;
+  for (const auto& field : fields) {
+    auto encoded = encode_field(field);
+    out.insert(out.end(), encoded.begin(), encoded.end());
+  }
+  return out;
 }
 
 std::optional<Field> first_len_field(std::span<const uint8_t> bytes, uint32_t field_number) {
@@ -219,4 +269,3 @@ bool paths_equal(std::span<const uint32_t> lhs, std::initializer_list<uint32_t> 
 }
 
 }  // namespace opengil
-
