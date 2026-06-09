@@ -1,0 +1,15 @@
+{
+  "ops": [
+    {
+      "op": "custom-vars.add",
+      "prefabId": 1086324737,
+      "name": "batchVar",
+      "type": "bool"
+    },
+    {
+      "op": "custom-vars.copy-all",
+      "sourcePrefabId": 1086324737,
+      "targetPrefabId": 1090519041
+    }
+  ]
+}

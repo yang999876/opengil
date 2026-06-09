@@ -11,6 +11,7 @@ Use `opengil` as the primary tool for `.gil` work.
 
 - Inspect before editing.
 - Prefer numeric ids over names for writes.
+- Prefer `--tab-id` over `--tab` on Windows command lines when tab names contain non-ASCII text.
 - Use `--dry-run` before complex writes.
 - Use `batch` for repeated edits so the file is opened and written once.
 - Validate after every write.
@@ -37,4 +38,3 @@ Stdout is machine JSON. Keep stderr as logs only.
 - Known pitfalls: `references/pitfalls.md`
 - Unknown-structure workflow: `references/research-workflow.md`
 - Legacy genshin-ts workflows: `references/legacy-workflows.md`
-

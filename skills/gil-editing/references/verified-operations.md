@@ -5,7 +5,7 @@
 - Add decoration: `top4 + top8 + top27`.
 - Add attachment point: `top4 + top8`.
 - Attach nodegraph: append reference payload to prefab `4.1.7.13`, scene `5.1.6.13`, preview `8.1.6.13`; do not edit `top10`.
-- Custom variable definitions: prefab `4.1.8`, scene `5.1.7`, preview `8.1.7`.
+- Custom variable definitions only: prefab `4.1.8`, scene `5.1.7`, preview `8.1.7`. Do not write runtime values in v1. Sync add/remove/copy across prefab and linked scene/preview entries.
 - Model asset id: prefab `4.1.2`, scene `5.1.8`, preview `8.1.8`; empty model also needs `tag 20 / field 29`.
 - Rename prefab: prefab `4.1.6.11.1` when present, with fallbacks for older observed name paths. This changes `top4` only.
 - Batch writes: apply supported atomic ops in memory and write once at the end.

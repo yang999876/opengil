@@ -11,6 +11,7 @@ add_library(opengil_core
   src/core/json_value.cpp
   src/core/sha256.cpp
   src/core/wire.cpp
+  src/ops/custom_vars_ops.cpp
   src/ops/model_ops.cpp
   src/ops/nodegraph_ops.cpp
   src/ops/prefab_ops.cpp
@@ -61,6 +62,10 @@ add_executable(opengil_projectile_tests tests/unit/test_projectile_ops.cpp)
 target_link_libraries(opengil_projectile_tests PRIVATE opengil_core)
 add_test(NAME opengil_projectile_tests COMMAND opengil_projectile_tests)
 
+add_executable(opengil_custom_vars_tests tests/unit/test_custom_vars_ops.cpp)
+target_link_libraries(opengil_custom_vars_tests PRIVATE opengil_core)
+add_test(NAME opengil_custom_vars_tests COMMAND opengil_custom_vars_tests)
+
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
 )
@@ -69,5 +74,12 @@ add_test(NAME opengil_cli_batch_dry_run
   COMMAND opengil batch
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
     --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-model-rename.json
+    --dry-run
+)
+
+add_test(NAME opengil_cli_batch_custom_vars_dry_run
+  COMMAND opengil batch
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-custom-vars.json
     --dry-run
 )

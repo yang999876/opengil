@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "opengil/gil.hpp"
+#include "opengil/custom_vars_ops.hpp"
 #include "opengil/json.hpp"
 #include "opengil/json_value.hpp"
 #include "opengil/model_ops.hpp"
@@ -50,14 +51,19 @@ struct CliError : std::runtime_error {
 struct BatchOp {
   std::string op;
   uint64_t prefab_id = 0;
+  uint64_t source_prefab_id = 0;
+  uint64_t target_prefab_id = 0;
   std::optional<uint64_t> asset_id;
   std::optional<uint64_t> nodegraph_id;
+  std::optional<uint64_t> tab_id;
   std::optional<double> x;
   std::optional<double> y;
   std::optional<double> angle_deg;
   std::optional<double> speed;
   std::optional<double> gravity;
   std::string name;
+  std::string type;
+  std::string tab;
 };
 
 Args parse_args(int argc, char** argv) {
@@ -114,6 +120,11 @@ uint64_t require_u64(const Args& args, const std::string& key) {
     throw CliError("USAGE", "--" + key + " must be an unsigned integer", EXIT_USAGE);
   }
   return value;
+}
+
+std::optional<uint64_t> optional_u64(const Args& args, const std::string& key) {
+  if (value_or_empty(args, key).empty()) return std::nullopt;
+  return require_u64(args, key);
 }
 
 double require_double(const Args& args, const std::string& key) {
@@ -367,6 +378,28 @@ uint64_t require_json_u64(
   return value->unsigned_value;
 }
 
+std::optional<uint64_t> optional_json_u64(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys) {
+  const auto* value = find_any(object, keys);
+  if (!value) return std::nullopt;
+  if (!value->is_unsigned()) {
+    throw CliError("USAGE", "batch unsigned integer field must be a JSON integer >= 0", EXIT_USAGE);
+  }
+  return value->unsigned_value;
+}
+
+std::optional<std::string> optional_json_string(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys) {
+  const auto* value = find_any(object, keys);
+  if (!value) return std::nullopt;
+  if (!value->is_string()) {
+    throw CliError("USAGE", "batch string field must be a JSON string", EXIT_USAGE);
+  }
+  return value->string_value;
+}
+
 std::optional<double> optional_json_number(
     const opengil::json::Value& object,
     std::initializer_list<std::string_view> keys) {
@@ -443,22 +476,42 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
 
     BatchOp op;
     op.op = require_json_string(item, {"op", "command"}, index);
-    op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
     if (op.op == "set-model") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.asset_id = require_json_u64(item, {"assetId", "asset-id", "modelAssetId", "model-asset-id"}, index);
     } else if (op.op == "set-empty-model") {
-      // No extra fields.
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
     } else if (op.op == "rename-prefab") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
     } else if (op.op == "attach-nodegraph") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.nodegraph_id = require_json_u64(item, {"nodegraphId", "nodegraph-id"}, index);
     } else if (op.op == "set-projectile-motion") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.x = optional_json_number(item, {"x", "velocityX", "velocity-x"});
       op.y = optional_json_number(item, {"y", "velocityY", "velocity-y"});
       op.angle_deg = optional_json_number(item, {"angleDeg", "angle-deg", "angle"});
       op.speed = optional_json_number(item, {"speed"});
       op.gravity = optional_json_number(item, {"gravity"});
       (void)projectile_input_from_numbers(op.x, op.y, op.angle_deg, op.speed, op.gravity);
+    } else if (op.op == "custom-vars.add") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
+      op.name = require_json_string(item, {"name"}, index);
+      op.type = require_json_string(item, {"type"}, index);
+    } else if (op.op == "custom-vars.remove") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
+      op.name = require_json_string(item, {"name"}, index);
+    } else if (op.op == "custom-vars.copy-all") {
+      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id", "fromPrefabId", "from-prefab-id"}, index);
+      op.target_prefab_id = require_json_u64(item, {"targetPrefabId", "target-prefab-id", "toPrefabId", "to-prefab-id"}, index);
+    } else if (op.op == "custom-vars.sync-tab") {
+      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
+      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
+      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
+      if (!op.tab_id && op.tab.empty()) {
+        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
+      }
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -524,6 +577,74 @@ std::string handle_set_projectile_motion(const Args& args) {
     result += ",\"dryRun\":true}";
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_custom_vars(const Args& args) {
+  if (args.positional.empty()) {
+    throw CliError("USAGE", "custom-vars requires a subcommand: list, add, remove, copy-all, sync-tab", EXIT_USAGE);
+  }
+
+  const std::string subcommand = args.positional[0];
+  const std::string command_name = "custom-vars." + subcommand;
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+
+  if (subcommand == "list") {
+    const auto rows = opengil::list_prefab_custom_variables(file, optional_u64(args, "prefab-id"));
+    const auto result = opengil::custom_variables_list_to_json(rows);
+    const auto json = envelope(command_name, true, file_input_json(file), "null", result, {}, {});
+    write_report_if_requested(args, json);
+    return json;
+  }
+
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  opengil::CustomVarsMutation mutation;
+
+  if (subcommand == "add") {
+    mutation = opengil::add_prefab_custom_variable(
+        file,
+        require_u64(args, "prefab-id"),
+        require_value(args, "name"),
+        require_value(args, "type"));
+  } else if (subcommand == "remove") {
+    mutation = opengil::remove_prefab_custom_variable(
+        file,
+        require_u64(args, "prefab-id"),
+        require_value(args, "name"));
+  } else if (subcommand == "copy-all") {
+    mutation = opengil::copy_prefab_custom_variables(
+        file,
+        require_u64(args, "from-prefab-id"),
+        require_u64(args, "to-prefab-id"));
+  } else if (subcommand == "sync-tab") {
+    const uint64_t source_prefab_id = require_u64(args, "source-prefab-id");
+    if (const auto tab_id = optional_u64(args, "tab-id")) {
+      mutation = opengil::sync_tab_custom_variables_by_tab_id(file, source_prefab_id, *tab_id);
+    } else {
+      mutation = opengil::sync_tab_custom_variables(file, source_prefab_id, require_value(args, "tab"));
+    }
+  } else {
+    throw CliError("USAGE", "unsupported custom-vars subcommand: " + subcommand, EXIT_USAGE);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = mutation.result_json;
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -637,6 +758,28 @@ std::string handle_batch(const Args& args) {
         const auto mutation = opengil::set_prefab_projectile_motion(current, op.prefab_id, motion);
         result_json = opengil::projectile_motion_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "custom-vars.add") {
+        const auto mutation = opengil::add_prefab_custom_variable(current, op.prefab_id, op.name, op.type);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "custom-vars.remove") {
+        const auto mutation = opengil::remove_prefab_custom_variable(current, op.prefab_id, op.name);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "custom-vars.copy-all") {
+        const auto mutation = opengil::copy_prefab_custom_variables(current, op.source_prefab_id, op.target_prefab_id);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "custom-vars.sync-tab") {
+        const auto mutation = op.tab_id
+            ? opengil::sync_tab_custom_variables_by_tab_id(current, op.source_prefab_id, *op.tab_id)
+            : opengil::sync_tab_custom_variables(current, op.source_prefab_id, op.tab);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
         final_bytes = mutation.bytes;
       }
 
@@ -777,6 +920,8 @@ int main(int argc, char** argv) {
       output = handle_attach_nodegraph(args, true);
     } else if (args.command == "set-projectile-motion") {
       output = handle_set_projectile_motion(args);
+    } else if (args.command == "custom-vars") {
+      output = handle_custom_vars(args);
     } else if (args.command == "batch") {
       output = handle_batch(args);
     } else {
