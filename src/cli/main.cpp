@@ -56,11 +56,15 @@ struct BatchOp {
   std::optional<uint64_t> asset_id;
   std::optional<uint64_t> nodegraph_id;
   std::optional<uint64_t> tab_id;
+  std::optional<uint64_t> new_prefab_id;
+  std::optional<uint64_t> prefab_id_start_after;
   std::optional<double> x;
   std::optional<double> y;
   std::optional<double> angle_deg;
   std::optional<double> speed;
   std::optional<double> gravity;
+  std::optional<double> preview_x_step;
+  std::optional<double> preview_z_step;
   std::string name;
   std::string type;
   std::string tab;
@@ -105,6 +109,21 @@ std::string require_value(const Args& args, const std::string& key) {
     throw CliError("USAGE", "missing required --" + key, EXIT_USAGE);
   }
   return value;
+}
+
+std::string require_any_value(const Args& args, std::initializer_list<std::string_view> keys) {
+  for (std::string_view key : keys) {
+    const auto value = value_or_empty(args, std::string(key));
+    if (!value.empty()) return value;
+  }
+  std::ostringstream out;
+  bool first = true;
+  for (std::string_view key : keys) {
+    if (!first) out << " or ";
+    first = false;
+    out << "--" << key;
+  }
+  throw CliError("USAGE", "missing required " + out.str(), EXIT_USAGE);
 }
 
 uint64_t require_u64(const Args& args, const std::string& key) {
@@ -512,6 +531,18 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       if (!op.tab_id && op.tab.empty()) {
         throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
       }
+    } else if (op.op == "clone-prefab") {
+      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
+      op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
+      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
+      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
+      op.new_prefab_id = optional_json_u64(item, {"newPrefabId", "new-prefab-id", "prefabId", "prefab-id"});
+      op.prefab_id_start_after = optional_json_u64(item, {"prefabIdStartAfter", "prefab-id-start-after"});
+      op.preview_x_step = optional_json_number(item, {"previewXStep", "preview-x-step"});
+      op.preview_z_step = optional_json_number(item, {"previewZStep", "preview-z-step"});
+      if (!op.tab_id && op.tab.empty()) {
+        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
+      }
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -715,6 +746,59 @@ std::string handle_rename_prefab(const Args& args) {
   return json;
 }
 
+opengil::ClonePrefabOptions clone_options_from_args(const Args& args) {
+  opengil::ClonePrefabOptions options;
+  options.new_prefab_id = optional_u64(args, "new-prefab-id");
+  options.prefab_id_start_after = optional_u64(args, "prefab-id-start-after");
+  if (const auto value = optional_double(args, "preview-x-step")) options.preview_x_step = *value;
+  if (const auto value = optional_double(args, "preview-z-step")) options.preview_z_step = *value;
+  return options;
+}
+
+opengil::ClonePrefabOptions clone_options_from_batch_op(const BatchOp& op) {
+  opengil::ClonePrefabOptions options;
+  options.new_prefab_id = op.new_prefab_id;
+  options.prefab_id_start_after = op.prefab_id_start_after;
+  if (op.preview_x_step) options.preview_x_step = *op.preview_x_step;
+  if (op.preview_z_step) options.preview_z_step = *op.preview_z_step;
+  return options;
+}
+
+std::string handle_clone_prefab(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t source_prefab_id = require_u64(args, "source-prefab-id");
+  const auto new_name = require_any_value(args, {"new-name", "name"});
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  const auto options = clone_options_from_args(args);
+
+  opengil::PrefabCloneMutation mutation;
+  if (const auto tab_id = optional_u64(args, "tab-id")) {
+    mutation = opengil::clone_prefab_into_tab_by_id(file, source_prefab_id, *tab_id, new_name, options);
+  } else {
+    mutation = opengil::clone_prefab_into_tab(file, source_prefab_id, require_value(args, "tab"), new_name, options);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::clone_prefab_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_batch(const Args& args) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile input_file = opengil::load_gil_file(input_path);
@@ -780,6 +864,14 @@ std::string handle_batch(const Args& args) {
             : opengil::sync_tab_custom_variables(current, op.source_prefab_id, op.tab);
         result_json = mutation.result_json;
         add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "clone-prefab") {
+        const auto options = clone_options_from_batch_op(op);
+        const auto mutation = op.tab_id
+            ? opengil::clone_prefab_into_tab_by_id(current, op.source_prefab_id, *op.tab_id, op.name, options)
+            : opengil::clone_prefab_into_tab(current, op.source_prefab_id, op.tab, op.name, options);
+        result_json = opengil::clone_prefab_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
       }
 
@@ -914,6 +1006,8 @@ int main(int argc, char** argv) {
       output = handle_set_model(args, true);
     } else if (args.command == "rename-prefab") {
       output = handle_rename_prefab(args);
+    } else if (args.command == "clone-prefab") {
+      output = handle_clone_prefab(args);
     } else if (args.command == "attach-nodegraph") {
       output = handle_attach_nodegraph(args, false);
     } else if (args.command == "attach-all-nodegraphs") {

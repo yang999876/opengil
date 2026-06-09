@@ -22,6 +22,7 @@ Implemented write commands:
 opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 --asset-id 20001220
 opengil set-empty-model --input input.gil --output output.gil --prefab-id 1077936130
 opengil rename-prefab --input input.gil --output output.gil --prefab-id 1077936130 --name "Renamed Prefab"
+opengil clone-prefab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab"
 opengil attach-nodegraph --input input.gil --output output.gil --prefab-id 1077936130 --nodegraph-id 1073741913
 opengil attach-all-nodegraphs --input input.gil --output output.gil --prefab-id 1077936130
 opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20
@@ -33,6 +34,7 @@ opengil custom-vars copy-all --input input.gil --output output.gil --from-prefab
 opengil custom-vars sync-tab --input input.gil --output output.gil --source-prefab-id 1077936340 --tab-id 6
 opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
 opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed Prefab" --dry-run
+opengil clone-prefab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab" --dry-run
 opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id 1073741913 --dry-run
 opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 80 --speed 20 --dry-run
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
@@ -43,6 +45,11 @@ opengil batch --input input.gil --ops ops.json --dry-run
 Custom variable writes edit definitions only, not runtime values. Valid `--type`
 values are `entity`, `int`, `bool`, `float`, `str`/`string`, and `vec`/`vec3`.
 Use `--tab-id` instead of `--tab` for non-ASCII tab names on Windows shells.
+
+`clone-prefab` clones a prefab definition into `top4`, appends a `100 -> prefabId`
+mapping to the target child tab in `top6`, appends the prefab to the unclassified
+prefab mapping, offsets the preview position, and clones prefab-side `top27`
+decoration records when the source has them. Prefer `--tab-id` over `--tab`.
 
 Batch `ops.json` may be either an array or an object with an `ops` array:
 
@@ -74,6 +81,12 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
     {
       "op": "set-empty-model",
       "prefabId": 1077936130
+    },
+    {
+      "op": "clone-prefab",
+      "sourcePrefabId": 1077936385,
+      "tabId": 6,
+      "newName": "Cloned Prefab"
     },
     {
       "op": "custom-vars.add",

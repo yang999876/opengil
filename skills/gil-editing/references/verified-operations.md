@@ -1,6 +1,6 @@
 # Verified Operation Surfaces
 
-- Copy existing prefab to existing tab: `top4 + top6`, clone `top27.field1` prefab-side decoration records when present.
+- Clone existing prefab to existing tab: `top4 + top6`, clone `top27.field1` prefab-side decoration records when present, and update decoration reference lists in the cloned prefab entry.
 - Delete prefab: `top4 + top6 + top10 + top27`.
 - Add decoration: `top4 + top8 + top27`.
 - Add attachment point: `top4 + top8`.
