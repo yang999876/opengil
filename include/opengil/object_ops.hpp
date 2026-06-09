@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,34 @@ struct ObjectMutation {
   std::string result_json;
   std::vector<uint32_t> changed_top_fields;
 };
+
+struct CreateSceneObjectOptions {
+  std::optional<uint64_t> object_id;
+  Transform transform;
+};
+
+struct CreatePrefabOptions {
+  std::optional<uint64_t> prefab_id;
+  Transform transform;
+};
+
+struct CreateScenePrefabInstanceOptions {
+  std::optional<uint64_t> object_id;
+  Transform transform;
+};
+
+ObjectMutation create_scene_object(const GilFile& file, uint64_t asset_id, const CreateSceneObjectOptions& options);
+ObjectMutation create_prefab(
+    const GilFile& file,
+    uint64_t asset_id,
+    const CreatePrefabOptions& options,
+    const GilFile* template_file = nullptr);
+ObjectMutation create_scene_prefab_instance(
+    const GilFile& file,
+    uint64_t prefab_id,
+    uint64_t asset_id,
+    const CreateScenePrefabInstanceOptions& options,
+    const GilFile* template_file = nullptr);
 
 ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform);

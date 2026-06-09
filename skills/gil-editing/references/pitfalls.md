@@ -5,6 +5,8 @@
 - On Windows command lines, non-ASCII `--tab` values can arrive mojibaked. Use `list-tabs`, then pass `--tab-id`.
 - Do not delete prefabs without handling `top10`.
 - Do not create prefab ids from global max alone; stay in the source id band and avoid ids in `top4/top5/top8/top27`.
+- For object creation, prefer explicit ids when reproducing research cases. Auto allocation is convenient but should be validated against the target workflow.
+- If create-prefab or create-scene-prefab-instance cannot find a close template in the current file, provide `--template template.gil` from an observed before/after sample instead of inventing fields.
 - When cloning prefabs, preserve the source prefab's internal reference list shape; only replace trailing source decoration ids with newly allocated ids.
 - Do not treat `静止球` as an ordinary projectile ball template.
 - Transform writes are full-message replacements; pass all axes if you do not want defaults for omitted fields.

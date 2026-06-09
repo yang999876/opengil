@@ -88,3 +88,10 @@ add_test(NAME opengil_cli_batch_custom_vars_dry_run
     --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-custom-vars.json
     --dry-run
 )
+
+add_test(NAME opengil_cli_batch_create_objects_dry_run
+  COMMAND opengil batch
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-create-objects.json
+    --dry-run
+)

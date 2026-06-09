@@ -59,6 +59,7 @@ struct BatchOp {
   std::optional<uint64_t> nodegraph_id;
   std::optional<uint64_t> tab_id;
   std::optional<uint64_t> new_prefab_id;
+  std::optional<uint64_t> requested_object_id;
   std::optional<uint64_t> prefab_id_start_after;
   std::optional<double> x;
   std::optional<double> y;
@@ -79,6 +80,7 @@ struct BatchOp {
   std::string name;
   std::string type;
   std::string tab;
+  std::string template_path;
 };
 
 Args parse_args(int argc, char** argv) {
@@ -506,6 +508,17 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
 
     BatchOp op;
     op.op = require_json_string(item, {"op", "command"}, index);
+    const auto parse_transform_fields = [&]() {
+      op.pos_x = optional_json_number(item, {"posX", "pos-x", "positionX", "position-x"});
+      op.pos_y = optional_json_number(item, {"posY", "pos-y", "positionY", "position-y"});
+      op.pos_z = optional_json_number(item, {"posZ", "pos-z", "positionZ", "position-z"});
+      op.rot_x = optional_json_number(item, {"rotX", "rot-x", "rotationX", "rotation-x"});
+      op.rot_y = optional_json_number(item, {"rotY", "rot-y", "rotationY", "rotation-y"});
+      op.rot_z = optional_json_number(item, {"rotZ", "rot-z", "rotationZ", "rotation-z"});
+      op.scale_x = optional_json_number(item, {"scaleX", "scale-x"});
+      op.scale_y = optional_json_number(item, {"scaleY", "scale-y"});
+      op.scale_z = optional_json_number(item, {"scaleZ", "scale-z"});
+    };
     if (op.op == "set-model") {
       op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
       op.asset_id = require_json_u64(item, {"assetId", "asset-id", "modelAssetId", "model-asset-id"}, index);
@@ -554,17 +567,24 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       if (!op.tab_id && op.tab.empty()) {
         throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
       }
+    } else if (op.op == "create-scene-object") {
+      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
+      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
+      parse_transform_fields();
+    } else if (op.op == "create-prefab") {
+      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
+      op.new_prefab_id = optional_json_u64(item, {"prefabId", "prefab-id", "newPrefabId", "new-prefab-id"});
+      op.template_path = optional_json_string(item, {"template", "templatePath", "template-path"}).value_or("");
+      parse_transform_fields();
+    } else if (op.op == "create-scene-prefab-instance") {
+      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
+      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
+      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
+      op.template_path = optional_json_string(item, {"template", "templatePath", "template-path"}).value_or("");
+      parse_transform_fields();
     } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
       op.object_id = require_json_u64(item, {"objectId", "object-id"}, index);
-      op.pos_x = optional_json_number(item, {"posX", "pos-x", "positionX", "position-x"});
-      op.pos_y = optional_json_number(item, {"posY", "pos-y", "positionY", "position-y"});
-      op.pos_z = optional_json_number(item, {"posZ", "pos-z", "positionZ", "position-z"});
-      op.rot_x = optional_json_number(item, {"rotX", "rot-x", "rotationX", "rotation-x"});
-      op.rot_y = optional_json_number(item, {"rotY", "rot-y", "rotationY", "rotation-y"});
-      op.rot_z = optional_json_number(item, {"rotZ", "rot-z", "rotationZ", "rotation-z"});
-      op.scale_x = optional_json_number(item, {"scaleX", "scale-x"});
-      op.scale_y = optional_json_number(item, {"scaleY", "scale-y"});
-      op.scale_z = optional_json_number(item, {"scaleZ", "scale-z"});
+      parse_transform_fields();
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -835,6 +855,62 @@ opengil::Transform transform_from_batch_op(const BatchOp& op) {
       op.scale_z);
 }
 
+std::string handle_create_object(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  const auto transform = transform_from_args(args);
+
+  std::optional<GilFile> template_file;
+  if (const auto template_path = value_or_empty(args, "template"); !template_path.empty()) {
+    template_file = opengil::load_gil_file(template_path);
+  }
+
+  opengil::ObjectMutation mutation;
+  if (args.command == "create-scene-object") {
+    opengil::CreateSceneObjectOptions options;
+    options.object_id = optional_u64(args, "object-id");
+    options.transform = transform;
+    mutation = opengil::create_scene_object(file, require_u64(args, "asset-id"), options);
+  } else if (args.command == "create-prefab") {
+    opengil::CreatePrefabOptions options;
+    options.prefab_id = optional_u64(args, "prefab-id");
+    options.transform = transform;
+    mutation = opengil::create_prefab(file, require_u64(args, "asset-id"), options, template_file ? &*template_file : nullptr);
+  } else if (args.command == "create-scene-prefab-instance") {
+    opengil::CreateScenePrefabInstanceOptions options;
+    options.object_id = optional_u64(args, "object-id");
+    options.transform = transform;
+    mutation = opengil::create_scene_prefab_instance(
+        file,
+        require_u64(args, "prefab-id"),
+        require_u64(args, "asset-id"),
+        options,
+        template_file ? &*template_file : nullptr);
+  } else {
+    throw CliError("USAGE", "unsupported create command: " + args.command, EXIT_USAGE);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = mutation.result_json;
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_clone_prefab(const Args& args) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
@@ -974,6 +1050,43 @@ std::string handle_batch(const Args& args) {
             : opengil::clone_prefab_into_tab(current, op.source_prefab_id, op.tab, op.name, options);
         result_json = opengil::clone_prefab_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "create-scene-object") {
+        opengil::CreateSceneObjectOptions options;
+        options.object_id = op.requested_object_id;
+        options.transform = transform_from_batch_op(op);
+        const auto mutation = opengil::create_scene_object(current, *op.asset_id, options);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "create-prefab") {
+        std::optional<GilFile> template_file;
+        if (!op.template_path.empty()) template_file = opengil::load_gil_file(op.template_path);
+        opengil::CreatePrefabOptions options;
+        options.prefab_id = op.new_prefab_id;
+        options.transform = transform_from_batch_op(op);
+        const auto mutation = opengil::create_prefab(
+            current,
+            *op.asset_id,
+            options,
+            template_file ? &*template_file : nullptr);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "create-scene-prefab-instance") {
+        std::optional<GilFile> template_file;
+        if (!op.template_path.empty()) template_file = opengil::load_gil_file(op.template_path);
+        opengil::CreateScenePrefabInstanceOptions options;
+        options.object_id = op.requested_object_id;
+        options.transform = transform_from_batch_op(op);
+        const auto mutation = opengil::create_scene_prefab_instance(
+            current,
+            op.prefab_id,
+            *op.asset_id,
+            options,
+            template_file ? &*template_file : nullptr);
+        result_json = mutation.result_json;
+        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
         final_bytes = mutation.bytes;
       } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
         const auto transform = transform_from_batch_op(op);
@@ -1118,6 +1231,10 @@ int main(int argc, char** argv) {
       output = handle_rename_prefab(args);
     } else if (args.command == "clone-prefab") {
       output = handle_clone_prefab(args);
+    } else if (args.command == "create-scene-object" ||
+               args.command == "create-prefab" ||
+               args.command == "create-scene-prefab-instance") {
+      output = handle_create_object(args);
     } else if (args.command == "set-scene-transform") {
       output = handle_set_transform(args, false);
     } else if (args.command == "set-preview-transform") {
