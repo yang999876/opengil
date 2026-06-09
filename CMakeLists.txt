@@ -11,6 +11,7 @@ add_library(opengil_core
   src/core/sha256.cpp
   src/core/wire.cpp
   src/ops/model_ops.cpp
+  src/ops/prefab_ops.cpp
   src/semantic/semantic.cpp
 )
 
@@ -37,6 +38,13 @@ target_compile_definitions(opengil_model_tests PRIVATE
   OPENGIL_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME opengil_model_tests COMMAND opengil_model_tests)
+
+add_executable(opengil_prefab_tests tests/unit/test_prefab_ops.cpp)
+target_link_libraries(opengil_prefab_tests PRIVATE opengil_core)
+target_compile_definitions(opengil_prefab_tests PRIVATE
+  OPENGIL_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+add_test(NAME opengil_prefab_tests COMMAND opengil_prefab_tests)
 
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil

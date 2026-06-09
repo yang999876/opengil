@@ -11,6 +11,7 @@
 #include "opengil/gil.hpp"
 #include "opengil/json.hpp"
 #include "opengil/model_ops.hpp"
+#include "opengil/prefab_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/version.hpp"
 
@@ -301,6 +302,39 @@ std::string handle_set_model(const Args& args, bool empty_model) {
   return json;
 }
 
+std::string handle_rename_prefab(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const auto new_name = require_value(args, "name");
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = opengil::rename_prefab(file, prefab_id, new_name);
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    const auto parent = output_path.parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent);
+    std::ofstream stream(output_path, std::ios::binary);
+    if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + output_path.string(), EXIT_WRITE);
+    stream.write(reinterpret_cast<const char*>(mutation.bytes.data()), static_cast<std::streamsize>(mutation.bytes.size()));
+    if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + output_path.string(), EXIT_WRITE);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::rename_prefab_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_with_input(const Args& args) {
   const auto input_path = require_value(args, "input");
   GilFile file = opengil::load_gil_file(input_path);
@@ -375,12 +409,14 @@ int main(int argc, char** argv) {
     }
 
     std::string output;
-  if (args.command == "diff-summary") {
+    if (args.command == "diff-summary") {
       output = handle_diff_summary(args);
     } else if (args.command == "set-model") {
       output = handle_set_model(args, false);
     } else if (args.command == "set-empty-model") {
       output = handle_set_model(args, true);
+    } else if (args.command == "rename-prefab") {
+      output = handle_rename_prefab(args);
     } else {
       output = handle_with_input(args);
     }
