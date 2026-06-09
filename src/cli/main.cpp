@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <cmath>
 #include <map>
 #include <optional>
 #include <set>
@@ -16,6 +17,7 @@
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
 #include "opengil/prefab_ops.hpp"
+#include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/version.hpp"
 
@@ -50,6 +52,11 @@ struct BatchOp {
   uint64_t prefab_id = 0;
   std::optional<uint64_t> asset_id;
   std::optional<uint64_t> nodegraph_id;
+  std::optional<double> x;
+  std::optional<double> y;
+  std::optional<double> angle_deg;
+  std::optional<double> speed;
+  std::optional<double> gravity;
   std::string name;
 };
 
@@ -107,6 +114,26 @@ uint64_t require_u64(const Args& args, const std::string& key) {
     throw CliError("USAGE", "--" + key + " must be an unsigned integer", EXIT_USAGE);
   }
   return value;
+}
+
+double require_double(const Args& args, const std::string& key) {
+  const auto text = require_value(args, key);
+  size_t consumed = 0;
+  double value = 0.0;
+  try {
+    value = std::stod(text, &consumed);
+  } catch (...) {
+    throw CliError("USAGE", "--" + key + " must be a finite number", EXIT_USAGE);
+  }
+  if (consumed != text.size() || !std::isfinite(value)) {
+    throw CliError("USAGE", "--" + key + " must be a finite number", EXIT_USAGE);
+  }
+  return value;
+}
+
+std::optional<double> optional_double(const Args& args, const std::string& key) {
+  if (value_or_empty(args, key).empty()) return std::nullopt;
+  return require_double(args, key);
 }
 
 std::string error_json(const std::string& code, const std::string& message) {
@@ -340,6 +367,53 @@ uint64_t require_json_u64(
   return value->unsigned_value;
 }
 
+std::optional<double> optional_json_number(
+    const opengil::json::Value& object,
+    std::initializer_list<std::string_view> keys) {
+  const auto* value = find_any(object, keys);
+  if (!value) return std::nullopt;
+  if (!value->is_number()) {
+    throw CliError("USAGE", "batch numeric field must be a JSON number", EXIT_USAGE);
+  }
+  return value->number_value;
+}
+
+opengil::ProjectileMotionInput projectile_input_from_numbers(
+    std::optional<double> x,
+    std::optional<double> y,
+    std::optional<double> angle_deg,
+    std::optional<double> speed,
+    std::optional<double> gravity) {
+  std::optional<float> gravity_value;
+  if (gravity) gravity_value = static_cast<float>(*gravity);
+  if (angle_deg && speed) {
+    return opengil::projectile_motion_from_angle(
+        static_cast<float>(*angle_deg),
+        static_cast<float>(*speed),
+        gravity_value);
+  }
+  if (x && y) {
+    opengil::ProjectileMotionInput input;
+    input.x = static_cast<float>(*x);
+    input.y = static_cast<float>(*y);
+    input.gravity = gravity_value;
+    return input;
+  }
+  throw CliError("USAGE", "projectile motion requires --x/--y or --angle/--speed", EXIT_USAGE);
+}
+
+opengil::ProjectileMotionInput projectile_input_from_args(const Args& args) {
+  const auto angle_deg = optional_double(args, "angle-deg").has_value()
+      ? optional_double(args, "angle-deg")
+      : optional_double(args, "angle");
+  return projectile_input_from_numbers(
+      optional_double(args, "x"),
+      optional_double(args, "y"),
+      angle_deg,
+      optional_double(args, "speed"),
+      optional_double(args, "gravity"));
+}
+
 std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
   opengil::json::Value root;
   try {
@@ -378,6 +452,13 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
     } else if (op.op == "attach-nodegraph") {
       op.nodegraph_id = require_json_u64(item, {"nodegraphId", "nodegraph-id"}, index);
+    } else if (op.op == "set-projectile-motion") {
+      op.x = optional_json_number(item, {"x", "velocityX", "velocity-x"});
+      op.y = optional_json_number(item, {"y", "velocityY", "velocity-y"});
+      op.angle_deg = optional_json_number(item, {"angleDeg", "angle-deg", "angle"});
+      op.speed = optional_json_number(item, {"speed"});
+      op.gravity = optional_json_number(item, {"gravity"});
+      (void)projectile_input_from_numbers(op.x, op.y, op.angle_deg, op.speed, op.gravity);
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -410,6 +491,34 @@ std::string handle_set_model(const Args& args, bool empty_model) {
   }
 
   std::string result = opengil::set_model_summary_to_json(mutation.model_summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_set_projectile_motion(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const auto motion = projectile_input_from_args(args);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = opengil::set_prefab_projectile_motion(file, prefab_id, motion);
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::projectile_motion_summary_to_json(mutation.summary);
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
@@ -521,6 +630,12 @@ std::string handle_batch(const Args& args) {
       } else if (op.op == "attach-nodegraph") {
         const auto mutation = opengil::attach_nodegraph_to_prefab(current, op.prefab_id, *op.nodegraph_id);
         result_json = opengil::attach_nodegraph_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "set-projectile-motion") {
+        const auto motion = projectile_input_from_numbers(op.x, op.y, op.angle_deg, op.speed, op.gravity);
+        const auto mutation = opengil::set_prefab_projectile_motion(current, op.prefab_id, motion);
+        result_json = opengil::projectile_motion_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
       }
@@ -660,6 +775,8 @@ int main(int argc, char** argv) {
       output = handle_attach_nodegraph(args, false);
     } else if (args.command == "attach-all-nodegraphs") {
       output = handle_attach_nodegraph(args, true);
+    } else if (args.command == "set-projectile-motion") {
+      output = handle_set_projectile_motion(args);
     } else if (args.command == "batch") {
       output = handle_batch(args);
     } else {

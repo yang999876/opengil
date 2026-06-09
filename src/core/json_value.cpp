@@ -1,6 +1,7 @@
 #include "opengil/json_value.hpp"
 
 #include <cctype>
+#include <cstdlib>
 #include <limits>
 #include <stdexcept>
 
@@ -62,7 +63,7 @@ class Parser {
     if (ch == '{') return parse_object();
     if (ch == '[') return parse_array();
     if (ch == '"') return parse_string_value();
-    if (ch >= '0' && ch <= '9') return parse_unsigned();
+    if (ch == '-' || (ch >= '0' && ch <= '9')) return parse_number();
     if (consume_literal("true")) {
       Value value;
       value.type = Value::Type::Bool;
@@ -162,26 +163,60 @@ class Parser {
     return value;
   }
 
-  Value parse_unsigned() {
-    Value value;
-    value.type = Value::Type::Unsigned;
+  Value parse_number() {
+    const size_t start = pos_;
+    bool integral_unsigned = true;
+    if (peek() == '-') {
+      integral_unsigned = false;
+      pos_++;
+    }
+
     uint64_t number = 0;
     if (peek() == '0') {
       pos_++;
       if (peek() >= '0' && peek() <= '9') fail("leading zero in number");
-    } else {
+    } else if (peek() >= '1' && peek() <= '9') {
       while (peek() >= '0' && peek() <= '9') {
         const uint64_t digit = static_cast<uint64_t>(take() - '0');
         if (number > (std::numeric_limits<uint64_t>::max() - digit) / 10) {
-          fail("unsigned integer overflow");
+          integral_unsigned = false;
+        } else {
+          number = number * 10 + digit;
         }
-        number = number * 10 + digit;
       }
+    } else {
+      fail("invalid number");
     }
-    if (peek() == '.' || peek() == 'e' || peek() == 'E') {
-      fail("only unsigned integer JSON numbers are supported");
+
+    if (peek() == '.') {
+      integral_unsigned = false;
+      pos_++;
+      if (!(peek() >= '0' && peek() <= '9')) fail("invalid fractional number");
+      while (peek() >= '0' && peek() <= '9') pos_++;
     }
-    value.unsigned_value = number;
+
+    if (peek() == 'e' || peek() == 'E') {
+      integral_unsigned = false;
+      pos_++;
+      if (peek() == '+' || peek() == '-') pos_++;
+      if (!(peek() >= '0' && peek() <= '9')) fail("invalid exponent");
+      while (peek() >= '0' && peek() <= '9') pos_++;
+    }
+
+    const std::string text(text_.substr(start, pos_ - start));
+    char* end = nullptr;
+    const double parsed = std::strtod(text.c_str(), &end);
+    if (!end || *end != '\0') fail("invalid number");
+
+    Value value;
+    if (integral_unsigned) {
+      value.type = Value::Type::Unsigned;
+      value.unsigned_value = number;
+      value.number_value = static_cast<double>(number);
+    } else {
+      value.type = Value::Type::Number;
+      value.number_value = parsed;
+    }
     return value;
   }
 

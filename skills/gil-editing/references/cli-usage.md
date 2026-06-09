@@ -24,9 +24,12 @@ opengil set-empty-model --input input.gil --output output.gil --prefab-id 107793
 opengil rename-prefab --input input.gil --output output.gil --prefab-id 1077936130 --name "Renamed Prefab"
 opengil attach-nodegraph --input input.gil --output output.gil --prefab-id 1077936130 --nodegraph-id 1073741913
 opengil attach-all-nodegraphs --input input.gil --output output.gil --prefab-id 1077936130
+opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20
+opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --x 3.47 --y 19.70 --gravity 20
 opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
 opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed Prefab" --dry-run
 opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id 1073741913 --dry-run
+opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 80 --speed 20 --dry-run
 opengil batch --input input.gil --output output.gil --ops ops.json
 opengil batch --input input.gil --ops ops.json --dry-run
 ```
@@ -50,6 +53,13 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
       "op": "attach-nodegraph",
       "prefabId": 1077936130,
       "nodegraphId": 1073741913
+    },
+    {
+      "op": "set-projectile-motion",
+      "prefabId": 1077936385,
+      "angleDeg": 80,
+      "speed": 20,
+      "gravity": 20
     },
     {
       "op": "set-empty-model",

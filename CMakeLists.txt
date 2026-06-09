@@ -14,6 +14,7 @@ add_library(opengil_core
   src/ops/model_ops.cpp
   src/ops/nodegraph_ops.cpp
   src/ops/prefab_ops.cpp
+  src/ops/projectile_ops.cpp
   src/semantic/semantic.cpp
 )
 
@@ -55,6 +56,10 @@ add_test(NAME opengil_prefab_tests COMMAND opengil_prefab_tests)
 add_executable(opengil_nodegraph_tests tests/unit/test_nodegraph_ops.cpp)
 target_link_libraries(opengil_nodegraph_tests PRIVATE opengil_core)
 add_test(NAME opengil_nodegraph_tests COMMAND opengil_nodegraph_tests)
+
+add_executable(opengil_projectile_tests tests/unit/test_projectile_ops.cpp)
+target_link_libraries(opengil_projectile_tests PRIVATE opengil_core)
+add_test(NAME opengil_projectile_tests COMMAND opengil_projectile_tests)
 
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil

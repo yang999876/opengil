@@ -9,4 +9,4 @@
 - Model asset id: prefab `4.1.2`, scene `5.1.8`, preview `8.1.8`; empty model also needs `tag 20 / field 29`.
 - Rename prefab: prefab `4.1.6.11.1` when present, with fallbacks for older observed name paths. This changes `top4` only.
 - Batch writes: apply supported atomic ops in memory and write once at the end.
-- Projectile motion: projectile component display name observed in legacy research; velocity `21.1.12.1.1/2`, gravity `21.1.12.2`.
+- Projectile motion: prefab-space component only; identify component kind `1 = 11` and display name `projectile motion`; set/insert velocity `21.1.12.1.1/2`, optionally set/insert gravity `21.1.12.2`.
