@@ -1,0 +1,84 @@
+// Documentation only. Do not use generated code for lossless writeback.
+// openGil edits .gil with a raw wire parser so unknown fields, ordering, and
+// byte-level encodings remain under explicit control.
+
+syntax = "proto3";
+
+package opengil.known;
+
+message GilPayload {
+  PrefabDefinitions prefab_definitions = 4;
+  SceneInstances scene_instances = 5;
+  CategoryIndex category_index = 6;
+  PreviewInstances preview_instances = 8;
+  NodeGraphPool node_graph_pool = 10;
+  DecorationStore decoration_store = 27;
+}
+
+message PrefabDefinitions {
+  repeated PrefabDefinition entries = 1;
+}
+
+message PrefabDefinition {
+  uint64 prefab_id = 1;
+  uint64 model_asset_id = 2;
+  // Verified name variants include 6.11 and 6.11.1.
+  // Verified nodegraph references live under 7.13.
+}
+
+message SceneInstances {
+  repeated SceneInstance entries = 1;
+}
+
+message SceneInstance {
+  uint64 object_id = 1;
+  PrefabRef prefab_ref = 2;
+  uint64 model_asset_id = 8;
+}
+
+message PreviewInstances {
+  repeated PreviewInstance entries = 1;
+}
+
+message PreviewInstance {
+  uint64 object_id = 1;
+  PrefabRef prefab_ref = 2;
+  uint64 model_asset_id = 8;
+}
+
+message PrefabRef {
+  uint64 prefab_or_asset_id = 1;
+}
+
+message CategoryIndex {
+  repeated CategoryEntry entries = 1;
+}
+
+message CategoryEntry {
+  uint64 category_id = 1;
+  // root = 2, payload = 3. Shapes are documented in semantic-paths.json.
+}
+
+message NodeGraphPool {
+  repeated NodeGraphContainer entries = 1;
+}
+
+message NodeGraphContainer {
+  // NodeGraph definitions are stored at 1.
+}
+
+message DecorationStore {
+  repeated PrefabDecorationRecord prefab_records = 1;
+  repeated SceneDecorationMirrorRecord scene_mirror_records = 2;
+}
+
+message PrefabDecorationRecord {
+  uint64 decoration_id = 1;
+  uint64 asset_id = 2;
+}
+
+message SceneDecorationMirrorRecord {
+  uint64 decoration_id = 1;
+  uint64 asset_id = 2;
+}
+

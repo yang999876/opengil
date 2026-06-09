@@ -1,0 +1,4 @@
+display_name: GIL Editing
+short_description: Inspect and safely edit verified `.gil` structures with openGil.
+default_prompt: Use the gil-editing skill to inspect, validate, and safely modify a `.gil` file with the openGil CLI.
+
