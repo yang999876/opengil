@@ -23,6 +23,8 @@ opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 -
 opengil set-empty-model --input input.gil --output output.gil --prefab-id 1077936130
 opengil rename-prefab --input input.gil --output output.gil --prefab-id 1077936130 --name "Renamed Prefab"
 opengil clone-prefab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab"
+opengil copy-prefab-to-tab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6
+opengil copy-prefab-to-tab --input input.gil --output output.gil --source-prefab-id 1077936385 --tab-id 6 --name "Copied Prefab"
 opengil attach-nodegraph --input input.gil --output output.gil --prefab-id 1077936130 --nodegraph-id 1073741913
 opengil attach-all-nodegraphs --input input.gil --output output.gil --prefab-id 1077936130
 opengil set-projectile-motion --input input.gil --output output.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20
@@ -41,6 +43,7 @@ opengil custom-vars sync-tab --input input.gil --output output.gil --source-pref
 opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
 opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed Prefab" --dry-run
 opengil clone-prefab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "Cloned Prefab" --dry-run
+opengil copy-prefab-to-tab --input input.gil --source-prefab-id 1077936385 --tab-id 6 --dry-run
 opengil attach-nodegraph --input input.gil --prefab-id 1077936130 --nodegraph-id 1073741913 --dry-run
 opengil set-projectile-motion --input input.gil --prefab-id 1077936385 --angle 80 --speed 20 --dry-run
 opengil create-prefab --input input.gil --asset-id 20001220 --prefab-id 1077938002 --dry-run
@@ -60,6 +63,8 @@ Use `--tab-id` instead of `--tab` for non-ASCII tab names on Windows shells.
 mapping to the target child tab in `top6`, appends the prefab to the unclassified
 prefab mapping, offsets the preview position, and clones prefab-side `top27`
 decoration records when the source has them. Prefer `--tab-id` over `--tab`.
+`copy-prefab-to-tab` uses the same core behavior, but `--name` is optional and
+defaults to the source prefab name plus `-copy`.
 
 Transform writes replace the full transform message at `5.1.6.11` or `8.1.6.11`.
 Unspecified position/rotation values default to `0`; unspecified scale values
@@ -139,6 +144,11 @@ Batch `ops.json` may be either an array or an object with an `ops` array:
       "sourcePrefabId": 1077936385,
       "tabId": 6,
       "newName": "Cloned Prefab"
+    },
+    {
+      "op": "copy-prefab-to-tab",
+      "sourcePrefabId": 1077936385,
+      "tabId": 6
     },
     {
       "op": "custom-vars.add",

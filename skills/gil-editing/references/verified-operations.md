@@ -1,6 +1,7 @@
 # Verified Operation Surfaces
 
 - Clone existing prefab to existing tab: `top4 + top6`, clone `top27.field1` prefab-side decoration records when present, and update decoration reference lists in the cloned prefab entry.
+- Copy prefab to tab: same write surface as clone existing prefab; default name is source prefab name plus `-copy`.
 - Create scene object: copy a reusable `top5.field1` template, patch object id at `5.1.1`, asset refs at `5.1.2.1` and `5.1.8`, replace transform at `5.1.6.11`, append scene mapping `200 -> objectId` to category `3` in `top6`.
 - Create prefab: copy a reusable `top4.field1` template, patch prefab id at `4.1.1`, asset id at `4.1.2`, replace transform at `4.1.7.11`, append prefab mapping `100 -> prefabId` to categories `6` and `3` in `top6`.
 - Create scene prefab instance: copy a reusable `top5.field1` template, patch object id at `5.1.1`, prefab ref at `5.1.2.1`, asset id at `5.1.8`, replace transform at `5.1.6.11`, append scene mapping `200 -> objectId` to category `3` in `top6`.

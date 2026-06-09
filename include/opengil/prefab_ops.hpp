@@ -65,6 +65,21 @@ PrefabCloneMutation clone_prefab_into_tab_by_id(
     const std::string& new_prefab_name,
     const ClonePrefabOptions& options = {});
 
+PrefabCloneMutation copy_prefab_to_tab(
+    const GilFile& file,
+    uint64_t source_prefab_id,
+    const std::string& target_tab_name,
+    const std::optional<std::string>& new_prefab_name = std::nullopt,
+    const ClonePrefabOptions& options = {});
+
+PrefabCloneMutation copy_prefab_to_tab_by_id(
+    const GilFile& file,
+    uint64_t source_prefab_id,
+    uint64_t target_tab_id,
+    const std::optional<std::string>& new_prefab_name = std::nullopt,
+    const ClonePrefabOptions& options = {});
+
 std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary);
+std::string copy_prefab_summary_to_json(const ClonePrefabSummary& summary);
 
 }  // namespace opengil

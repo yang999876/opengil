@@ -25,6 +25,7 @@ The CLI target is `opengil`.
 .\build\Release\opengil.exe set-model --input I:\Wanderland\genshin-ts\backups\test1.gil --output out.gil --prefab-id 1086324737 --asset-id 20001220
 .\build\Release\opengil.exe rename-prefab --input I:\Wanderland\genshin-ts\backups\test1.gil --output renamed.gil --prefab-id 1086324737 --name "Renamed Prefab"
 .\build\Release\opengil.exe clone-prefab --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output cloned.gil --source-prefab-id 1077936385 --tab-id 6 --new-name "openGil Clone Test"
+.\build\Release\opengil.exe copy-prefab-to-tab --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output copied.gil --source-prefab-id 1077936385 --tab-id 6
 .\build\Release\opengil.exe batch --input I:\Wanderland\genshin-ts\backups\test1.gil --output batched.gil --ops tests\fixtures\batch-model-rename.json
 .\build\Release\opengil.exe attach-nodegraph --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output attached.gil --prefab-id 1086324737 --nodegraph-id 1073741913
 .\build\Release\opengil.exe set-projectile-motion --input I:\Wanderland\genshin-ts\backups\1073741843.gil --output projectile.gil --prefab-id 1077936385 --angle 80 --speed 20 --gravity 20

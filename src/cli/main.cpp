@@ -124,21 +124,6 @@ std::string require_value(const Args& args, const std::string& key) {
   return value;
 }
 
-std::string require_any_value(const Args& args, std::initializer_list<std::string_view> keys) {
-  for (std::string_view key : keys) {
-    const auto value = value_or_empty(args, std::string(key));
-    if (!value.empty()) return value;
-  }
-  std::ostringstream out;
-  bool first = true;
-  for (std::string_view key : keys) {
-    if (!first) out << " or ";
-    first = false;
-    out << "--" << key;
-  }
-  throw CliError("USAGE", "missing required " + out.str(), EXIT_USAGE);
-}
-
 uint64_t require_u64(const Args& args, const std::string& key) {
   const auto text = require_value(args, key);
   size_t consumed = 0;
@@ -567,6 +552,18 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       if (!op.tab_id && op.tab.empty()) {
         throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
       }
+    } else if (op.op == "copy-prefab-to-tab") {
+      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
+      op.name = optional_json_string(item, {"name", "newName", "new-name"}).value_or("");
+      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
+      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
+      op.new_prefab_id = optional_json_u64(item, {"newPrefabId", "new-prefab-id", "prefabId", "prefab-id"});
+      op.prefab_id_start_after = optional_json_u64(item, {"prefabIdStartAfter", "prefab-id-start-after"});
+      op.preview_x_step = optional_json_number(item, {"previewXStep", "preview-x-step"});
+      op.preview_z_step = optional_json_number(item, {"previewZStep", "preview-z-step"});
+      if (!op.tab_id && op.tab.empty()) {
+        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
+      }
     } else if (op.op == "create-scene-object") {
       op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
       op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
@@ -915,13 +912,27 @@ std::string handle_clone_prefab(const Args& args) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
   const uint64_t source_prefab_id = require_u64(args, "source-prefab-id");
-  const auto new_name = require_any_value(args, {"new-name", "name"});
+  const bool copy_command = args.command == "copy-prefab-to-tab";
+  auto new_name = value_or_empty(args, "new-name");
+  if (new_name.empty()) new_name = value_or_empty(args, "name");
+  if (!copy_command && new_name.empty()) {
+    throw CliError("USAGE", "missing required --new-name or --name", EXIT_USAGE);
+  }
   const auto output_path = resolve_write_output_path(args, input_path);
   const bool dry_run = args.flags.contains("dry-run");
   const auto options = clone_options_from_args(args);
 
   opengil::PrefabCloneMutation mutation;
-  if (const auto tab_id = optional_u64(args, "tab-id")) {
+  const std::optional<std::string> optional_name = new_name.empty()
+      ? std::nullopt
+      : std::optional<std::string>(new_name);
+  if (copy_command) {
+    if (const auto tab_id = optional_u64(args, "tab-id")) {
+      mutation = opengil::copy_prefab_to_tab_by_id(file, source_prefab_id, *tab_id, optional_name, options);
+    } else {
+      mutation = opengil::copy_prefab_to_tab(file, source_prefab_id, require_value(args, "tab"), optional_name, options);
+    }
+  } else if (const auto tab_id = optional_u64(args, "tab-id")) {
     mutation = opengil::clone_prefab_into_tab_by_id(file, source_prefab_id, *tab_id, new_name, options);
   } else {
     mutation = opengil::clone_prefab_into_tab(file, source_prefab_id, require_value(args, "tab"), new_name, options);
@@ -936,7 +947,9 @@ std::string handle_clone_prefab(const Args& args) {
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
-  std::string result = opengil::clone_prefab_summary_to_json(mutation.summary);
+  std::string result = copy_command
+      ? opengil::copy_prefab_summary_to_json(mutation.summary)
+      : opengil::clone_prefab_summary_to_json(mutation.summary);
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
@@ -1049,6 +1062,17 @@ std::string handle_batch(const Args& args) {
             ? opengil::clone_prefab_into_tab_by_id(current, op.source_prefab_id, *op.tab_id, op.name, options)
             : opengil::clone_prefab_into_tab(current, op.source_prefab_id, op.tab, op.name, options);
         result_json = opengil::clone_prefab_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "copy-prefab-to-tab") {
+        const auto options = clone_options_from_batch_op(op);
+        const std::optional<std::string> optional_name = op.name.empty()
+            ? std::nullopt
+            : std::optional<std::string>(op.name);
+        const auto mutation = op.tab_id
+            ? opengil::copy_prefab_to_tab_by_id(current, op.source_prefab_id, *op.tab_id, optional_name, options)
+            : opengil::copy_prefab_to_tab(current, op.source_prefab_id, op.tab, optional_name, options);
+        result_json = opengil::copy_prefab_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
       } else if (op.op == "create-scene-object") {
@@ -1230,6 +1254,8 @@ int main(int argc, char** argv) {
     } else if (args.command == "rename-prefab") {
       output = handle_rename_prefab(args);
     } else if (args.command == "clone-prefab") {
+      output = handle_clone_prefab(args);
+    } else if (args.command == "copy-prefab-to-tab") {
       output = handle_clone_prefab(args);
     } else if (args.command == "create-scene-object" ||
                args.command == "create-prefab" ||

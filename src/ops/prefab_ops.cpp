@@ -9,6 +9,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 #include "opengil/json.hpp"
@@ -777,6 +778,30 @@ PrefabCloneMutation clone_prefab_into_tab(
   return clone_prefab_into_tab_by_id(file, source_prefab_id, *target_tab_id, new_prefab_name, options);
 }
 
+PrefabCloneMutation copy_prefab_to_tab(
+    const GilFile& file,
+    uint64_t source_prefab_id,
+    const std::string& target_tab_name,
+    const std::optional<std::string>& new_prefab_name,
+    const ClonePrefabOptions& options) {
+  const auto resolved_name = (new_prefab_name && !new_prefab_name->empty())
+      ? *new_prefab_name
+      : find_prefab_name(file, source_prefab_id) + "-copy";
+  return clone_prefab_into_tab(file, source_prefab_id, target_tab_name, resolved_name, options);
+}
+
+PrefabCloneMutation copy_prefab_to_tab_by_id(
+    const GilFile& file,
+    uint64_t source_prefab_id,
+    uint64_t target_tab_id,
+    const std::optional<std::string>& new_prefab_name,
+    const ClonePrefabOptions& options) {
+  const auto resolved_name = (new_prefab_name && !new_prefab_name->empty())
+      ? *new_prefab_name
+      : find_prefab_name(file, source_prefab_id) + "-copy";
+  return clone_prefab_into_tab_by_id(file, source_prefab_id, target_tab_id, resolved_name, options);
+}
+
 std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
   std::ostringstream out;
   out << "{"
@@ -792,7 +817,7 @@ std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
   return out.str();
 }
 
-std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary) {
+std::string clone_prefab_summary_to_json_with_kind(const ClonePrefabSummary& summary, std::string_view kind) {
   std::ostringstream preview_x;
   preview_x << std::fixed << std::setprecision(6) << summary.preview_x;
   std::ostringstream preview_z;
@@ -800,7 +825,7 @@ std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary) {
 
   std::ostringstream out;
   out << "{"
-      << "\"kind\":\"clonePrefab\","
+      << "\"kind\":" << json::quote(std::string(kind)) << ","
       << "\"sourcePrefabId\":" << summary.source_prefab_id << ","
       << "\"sourceName\":" << json::quote(summary.source_name) << ","
       << "\"newPrefabId\":" << summary.new_prefab_id << ","
@@ -821,6 +846,14 @@ std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary) {
   }
   out << "]}";
   return out.str();
+}
+
+std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary) {
+  return clone_prefab_summary_to_json_with_kind(summary, "clonePrefab");
+}
+
+std::string copy_prefab_summary_to_json(const ClonePrefabSummary& summary) {
+  return clone_prefab_summary_to_json_with_kind(summary, "copyPrefabToTab");
 }
 
 }  // namespace opengil

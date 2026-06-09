@@ -243,5 +243,26 @@ int main() {
   assert(clone_tabs[0].name == "Balls");
   assert(has_decoration_owner(cloned_file, 1002, 102));
 
+  const auto copied = opengil::copy_prefab_to_tab_by_id(clone_file, 101, 6);
+  assert(copied.summary.source_prefab_id == 101);
+  assert(copied.summary.source_name == "Source Prefab");
+  assert(copied.summary.new_prefab_id == 102);
+  assert(copied.summary.new_prefab_name == "Source Prefab-copy");
+  assert(copied.summary.target_tab_id == 6);
+  assert(copied.summary.cloned_decoration_count == 1);
+
+  const auto copied_file = load_mutation_as_file(copied, "opengil-test-copy-prefab-to-tab.gil");
+  assert(opengil::validate_gil(copied_file).ok);
+  const auto copied_prefabs = opengil::list_prefabs(copied_file);
+  bool found_copy = false;
+  for (const auto& prefab : copied_prefabs) {
+    if (prefab.prefab_id == 102) {
+      assert(prefab.name == "Source Prefab-copy");
+      found_copy = true;
+    }
+  }
+  assert(found_copy);
+  assert(has_decoration_owner(copied_file, 1002, 102));
+
   return 0;
 }
