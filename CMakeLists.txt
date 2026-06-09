@@ -12,6 +12,7 @@ add_library(opengil_core
   src/core/sha256.cpp
   src/core/wire.cpp
   src/ops/model_ops.cpp
+  src/ops/nodegraph_ops.cpp
   src/ops/prefab_ops.cpp
   src/semantic/semantic.cpp
 )
@@ -50,6 +51,10 @@ target_compile_definitions(opengil_prefab_tests PRIVATE
   OPENGIL_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
 )
 add_test(NAME opengil_prefab_tests COMMAND opengil_prefab_tests)
+
+add_executable(opengil_nodegraph_tests tests/unit/test_nodegraph_ops.cpp)
+target_link_libraries(opengil_nodegraph_tests PRIVATE opengil_core)
+add_test(NAME opengil_nodegraph_tests COMMAND opengil_nodegraph_tests)
 
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil

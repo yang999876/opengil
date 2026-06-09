@@ -14,6 +14,7 @@
 #include "opengil/json.hpp"
 #include "opengil/json_value.hpp"
 #include "opengil/model_ops.hpp"
+#include "opengil/nodegraph_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/version.hpp"
@@ -48,6 +49,7 @@ struct BatchOp {
   std::string op;
   uint64_t prefab_id = 0;
   std::optional<uint64_t> asset_id;
+  std::optional<uint64_t> nodegraph_id;
   std::string name;
 };
 
@@ -374,6 +376,8 @@ std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
       // No extra fields.
     } else if (op.op == "rename-prefab") {
       op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
+    } else if (op.op == "attach-nodegraph") {
+      op.nodegraph_id = require_json_u64(item, {"nodegraphId", "nodegraph-id"}, index);
     } else {
       throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
     }
@@ -406,6 +410,44 @@ std::string handle_set_model(const Args& args, bool empty_model) {
   }
 
   std::string result = opengil::set_model_summary_to_json(mutation.model_summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_attach_nodegraph(const Args& args, bool attach_all) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t prefab_id = require_u64(args, "prefab-id");
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  std::vector<uint8_t> bytes;
+  std::string result;
+  if (attach_all) {
+    const auto mutation = opengil::attach_all_nodegraphs_to_prefab(file, prefab_id);
+    bytes = mutation.bytes;
+    result = opengil::attach_all_nodegraphs_summary_to_json(mutation.summary);
+  } else {
+    const uint64_t nodegraph_id = require_u64(args, "nodegraph-id");
+    const auto mutation = opengil::attach_nodegraph_to_prefab(file, prefab_id, nodegraph_id);
+    bytes = mutation.bytes;
+    result = opengil::attach_nodegraph_summary_to_json(mutation.summary);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_bytes_to_path(output_path, bytes);
+    output_json = output_file_json(output_path, bytes);
+  }
+
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
@@ -474,6 +516,11 @@ std::string handle_batch(const Args& args) {
       } else if (op.op == "rename-prefab") {
         const auto mutation = opengil::rename_prefab(current, op.prefab_id, op.name);
         result_json = opengil::rename_prefab_summary_to_json(mutation.summary);
+        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
+        final_bytes = mutation.bytes;
+      } else if (op.op == "attach-nodegraph") {
+        const auto mutation = opengil::attach_nodegraph_to_prefab(current, op.prefab_id, *op.nodegraph_id);
+        result_json = opengil::attach_nodegraph_summary_to_json(mutation.summary);
         add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
         final_bytes = mutation.bytes;
       }
@@ -609,6 +656,10 @@ int main(int argc, char** argv) {
       output = handle_set_model(args, true);
     } else if (args.command == "rename-prefab") {
       output = handle_rename_prefab(args);
+    } else if (args.command == "attach-nodegraph") {
+      output = handle_attach_nodegraph(args, false);
+    } else if (args.command == "attach-all-nodegraphs") {
+      output = handle_attach_nodegraph(args, true);
     } else if (args.command == "batch") {
       output = handle_batch(args);
     } else {
