@@ -38,5 +38,5 @@ See `skills/gil-editing/references/cli-usage.md` for the full command reference.
 
 For project architecture and feature development notes, see:
 
-- `docs/development.zh.md` Chinese
-- `docs/development.md` English
+- `docs/development.zh.md` Chinese, primary guide
+- `docs/development.md` English, shorter reference

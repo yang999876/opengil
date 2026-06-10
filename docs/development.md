@@ -1,5 +1,9 @@
 # openGil Development Notes
 
+The Chinese document `docs/development.zh.md` is the primary development guide.
+This English document is a shorter reference, not a line-by-line translation. If
+the two documents differ in detail, prefer the Chinese guide.
+
 This document describes the current project shape and the preferred path for
 adding new `.gil` capabilities. It is written for future maintainers and agents
 working inside this repository.
@@ -222,4 +226,3 @@ behavior before attempting generalized editing.
   domain/CLI JSON split keeps that path open.
 - UI import workflows such as `ui import-geometrize` and `ui import-pixel` are
   intentionally not implemented in this round.
-
