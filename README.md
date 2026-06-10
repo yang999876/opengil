@@ -35,3 +35,6 @@ sizes and protobuf wire parsing. It does not prove semantic consistency such as
 unique ids, mirrored scene/preview records, tab mappings, or dangling references.
 
 See `skills/gil-editing/references/cli-usage.md` for the full command reference.
+
+For project architecture and feature development notes, see
+`docs/development.md`.
