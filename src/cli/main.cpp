@@ -26,6 +26,7 @@
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/ui_ops.hpp"
+#include "opengil/ui_patch_ops.hpp"
 #include "opengil/version.hpp"
 
 #ifdef _WIN32
@@ -60,6 +61,8 @@ struct CliError : std::runtime_error {
   CliError(std::string c, std::string message, int e)
       : std::runtime_error(std::move(message)), code(std::move(c)), exit_code(e) {}
 };
+
+opengil::UiPrimitiveTransform ui_transform_from_args(const Args& args);
 
 struct BatchOp {
   std::string op;
@@ -148,6 +151,21 @@ uint64_t require_u64(const Args& args, const std::string& key) {
   }
   if (consumed != text.size()) {
     throw CliError("USAGE", "--" + key + " must be an unsigned integer", EXIT_USAGE);
+  }
+  return value;
+}
+
+int64_t require_i64(const Args& args, const std::string& key) {
+  const auto text = require_value(args, key);
+  size_t consumed = 0;
+  int64_t value = 0;
+  try {
+    value = std::stoll(text, &consumed, 10);
+  } catch (...) {
+    throw CliError("USAGE", "--" + key + " must be an integer", EXIT_USAGE);
+  }
+  if (consumed != text.size()) {
+    throw CliError("USAGE", "--" + key + " must be an integer", EXIT_USAGE);
   }
   return value;
 }
@@ -892,20 +910,62 @@ std::string handle_attachment(const Args& args) {
 
 std::string handle_ui(const Args& args) {
   if (args.positional.empty()) {
-    throw CliError("USAGE", "ui requires a subcommand: list", EXIT_USAGE);
+    throw CliError("USAGE", "ui requires a subcommand", EXIT_USAGE);
   }
   const std::string subcommand = args.positional[0];
-  if (subcommand != "list") {
-    throw CliError("USAGE", "unsupported ui subcommand: " + subcommand, EXIT_USAGE);
-  }
 
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
   const uint64_t controller_entry_id = optional_u64(args, "controller-entry-id")
       .value_or(opengil::kDefaultUiPrimitiveControllerEntryId);
-  const auto list = opengil::list_ui_primitives(file, controller_entry_id);
-  const auto result = opengil::ui_primitive_list_to_json(list);
-  const auto json = envelope("ui.list", true, file_input_json(file), "null", result, {}, {});
+  if (subcommand == "list") {
+    const auto list = opengil::list_ui_primitives(file, controller_entry_id);
+    const auto result = opengil::ui_primitive_list_to_json(list);
+    const auto json = envelope("ui.list", true, file_input_json(file), "null", result, {}, {});
+    write_report_if_requested(args, json);
+    return json;
+  }
+
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+  const auto primitive_index = static_cast<size_t>(require_u64(args, "primitive-index"));
+
+  opengil::UiPrimitivePatchMutation mutation;
+  std::string command_name;
+  if (subcommand == "set-type") {
+    mutation = opengil::set_ui_primitive_type(file, primitive_index, require_u64(args, "type-id"), controller_entry_id);
+    command_name = "ui.set-type";
+  } else if (subcommand == "set-color") {
+    mutation = opengil::set_ui_primitive_color(file, primitive_index, require_i64(args, "color"), controller_entry_id);
+    command_name = "ui.set-color";
+  } else if (subcommand == "set-transform") {
+    mutation = opengil::set_ui_primitive_transform(file, primitive_index, ui_transform_from_args(args), controller_entry_id);
+    command_name = "ui.set-transform";
+  } else if (subcommand == "set-layer") {
+    mutation = opengil::set_ui_primitive_layer(file, primitive_index, require_u64(args, "layer"), controller_entry_id);
+    command_name = "ui.set-layer";
+  } else if (subcommand == "set-name") {
+    mutation = opengil::set_ui_primitive_name(file, primitive_index, require_value(args, "name"), controller_entry_id);
+    command_name = "ui.set-name";
+  } else {
+    throw CliError("USAGE", "unsupported ui subcommand: " + subcommand, EXIT_USAGE);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_output_bytes(args, output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result.pop_back();
+    result += ",\"dryRun\":true}";
+  }
+  const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -1055,6 +1115,19 @@ opengil::Transform transform_from_args(const Args& args) {
       optional_double(args, "scale-x"),
       optional_double(args, "scale-y"),
       optional_double(args, "scale-z"));
+}
+
+opengil::UiPrimitiveTransform ui_transform_from_args(const Args& args) {
+  opengil::UiPrimitiveTransform transform;
+  transform.position.x = optional_double(args, "pos-x");
+  transform.position.y = optional_double(args, "pos-y");
+  transform.size.x = optional_double(args, "width");
+  transform.size.y = optional_double(args, "height");
+  transform.scale.x = optional_double(args, "scale-x");
+  transform.scale.y = optional_double(args, "scale-y");
+  transform.scale.z = optional_double(args, "scale-z");
+  transform.rotation_z = optional_double(args, "rot-z");
+  return transform;
 }
 
 opengil::Transform transform_from_batch_op(const BatchOp& op) {
