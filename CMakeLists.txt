@@ -22,6 +22,7 @@ add_library(opengil_core
   src/ops/projectile_ops.cpp
   src/ops/ui_ops.cpp
   src/ops/ui_patch_ops.cpp
+  src/ops/ui_structure_ops.cpp
   src/semantic/semantic.cpp
 )
 
@@ -76,6 +77,10 @@ add_executable(opengil_ui_patch_tests tests/unit/test_ui_patch_ops.cpp)
 target_link_libraries(opengil_ui_patch_tests PRIVATE opengil_core)
 add_test(NAME opengil_ui_patch_tests COMMAND opengil_ui_patch_tests)
 
+add_executable(opengil_ui_structure_tests tests/unit/test_ui_structure_ops.cpp)
+target_link_libraries(opengil_ui_structure_tests PRIVATE opengil_core)
+add_test(NAME opengil_ui_structure_tests COMMAND opengil_ui_structure_tests)
+
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
 add_test(NAME opengil_object_tests COMMAND opengil_object_tests)
@@ -102,6 +107,33 @@ add_test(NAME opengil_cli_validate_fixture
 
 add_test(NAME opengil_cli_ui_list_fixture
   COMMAND opengil ui list --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+
+add_test(NAME opengil_cli_ui_append_dry_run
+  COMMAND opengil ui append
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --template ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --target-controller-entry-id 1073741855
+    --template-primitive-index 0
+    --dry-run
+)
+
+add_test(NAME opengil_cli_ui_retain_dry_run
+  COMMAND opengil ui retain
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --controller-entry-id 1073741855
+    --primitive-indexes 0,1
+    --dry-run
+)
+
+add_test(NAME opengil_cli_ui_copy_transform_from_template_dry_run
+  COMMAND opengil ui copy-transform-from-template
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --template ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --controller-entry-id 1073741855
+    --primitive-index 0
+    --template-primitive-index 1
+    --dry-run
 )
 
 add_test(NAME opengil_cli_unknown_command_fails

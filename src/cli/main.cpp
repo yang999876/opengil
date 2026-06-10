@@ -27,6 +27,7 @@
 #include "opengil/semantic.hpp"
 #include "opengil/ui_ops.hpp"
 #include "opengil/ui_patch_ops.hpp"
+#include "opengil/ui_structure_ops.hpp"
 #include "opengil/version.hpp"
 
 #ifdef _WIN32
@@ -175,6 +176,10 @@ std::optional<uint64_t> optional_u64(const Args& args, const std::string& key) {
   return require_u64(args, key);
 }
 
+size_t require_size(const Args& args, const std::string& key) {
+  return static_cast<size_t>(require_u64(args, key));
+}
+
 double require_double(const Args& args, const std::string& key) {
   const auto text = require_value(args, key);
   size_t consumed = 0;
@@ -193,6 +198,36 @@ double require_double(const Args& args, const std::string& key) {
 std::optional<double> optional_double(const Args& args, const std::string& key) {
   if (value_or_empty(args, key).empty()) return std::nullopt;
   return require_double(args, key);
+}
+
+std::vector<uint64_t> parse_u64_csv(const std::string& text, const std::string& key) {
+  std::vector<uint64_t> values;
+  if (text.empty()) return values;
+
+  std::stringstream stream(text);
+  std::string part;
+  while (std::getline(stream, part, ',')) {
+    if (part.empty()) {
+      throw CliError("USAGE", "--" + key + " contains an empty item", EXIT_USAGE);
+    }
+    size_t consumed = 0;
+    uint64_t value = 0;
+    try {
+      value = std::stoull(part, &consumed, 10);
+    } catch (...) {
+      throw CliError("USAGE", "--" + key + " must be a comma-separated unsigned integer list", EXIT_USAGE);
+    }
+    if (consumed != part.size()) {
+      throw CliError("USAGE", "--" + key + " must be a comma-separated unsigned integer list", EXIT_USAGE);
+    }
+    values.push_back(value);
+  }
+  return values;
+}
+
+std::vector<size_t> parse_size_csv(const std::string& text, const std::string& key) {
+  const auto raw = parse_u64_csv(text, key);
+  return std::vector<size_t>(raw.begin(), raw.end());
 }
 
 std::string error_json(const std::string& code, const std::string& message) {
@@ -928,25 +963,101 @@ std::string handle_ui(const Args& args) {
 
   const auto output_path = resolve_write_output_path(args, input_path);
   const bool dry_run = args.flags.contains("dry-run");
-  const auto primitive_index = static_cast<size_t>(require_u64(args, "primitive-index"));
 
-  opengil::UiPrimitivePatchMutation mutation;
   std::string command_name;
+  std::string result;
+  std::vector<uint8_t> output_bytes;
+
   if (subcommand == "set-type") {
-    mutation = opengil::set_ui_primitive_type(file, primitive_index, require_u64(args, "type-id"), controller_entry_id);
+    const auto mutation = opengil::set_ui_primitive_type(file, require_size(args, "primitive-index"), require_u64(args, "type-id"), controller_entry_id);
     command_name = "ui.set-type";
+    result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
   } else if (subcommand == "set-color") {
-    mutation = opengil::set_ui_primitive_color(file, primitive_index, require_i64(args, "color"), controller_entry_id);
+    const auto mutation = opengil::set_ui_primitive_color(file, require_size(args, "primitive-index"), require_i64(args, "color"), controller_entry_id);
     command_name = "ui.set-color";
+    result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
   } else if (subcommand == "set-transform") {
-    mutation = opengil::set_ui_primitive_transform(file, primitive_index, ui_transform_from_args(args), controller_entry_id);
+    const auto mutation = opengil::set_ui_primitive_transform(file, require_size(args, "primitive-index"), ui_transform_from_args(args), controller_entry_id);
     command_name = "ui.set-transform";
+    result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
   } else if (subcommand == "set-layer") {
-    mutation = opengil::set_ui_primitive_layer(file, primitive_index, require_u64(args, "layer"), controller_entry_id);
+    const auto mutation = opengil::set_ui_primitive_layer(file, require_size(args, "primitive-index"), require_u64(args, "layer"), controller_entry_id);
     command_name = "ui.set-layer";
+    result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
   } else if (subcommand == "set-name") {
-    mutation = opengil::set_ui_primitive_name(file, primitive_index, require_value(args, "name"), controller_entry_id);
+    const auto mutation = opengil::set_ui_primitive_name(file, require_size(args, "primitive-index"), require_value(args, "name"), controller_entry_id);
     command_name = "ui.set-name";
+    result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
+  } else if (subcommand == "append") {
+    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
+    opengil::UiAppendOptions options;
+    options.template_primitive_index = optional_u64(args, "template-primitive-index")
+        ? require_size(args, "template-primitive-index")
+        : 0;
+    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
+        ? optional_u64(args, "target-controller-entry-id")
+        : optional_u64(args, "controller-entry-id");
+    options.entry_id = optional_u64(args, "entry-id");
+    const auto mutation = opengil::append_ui_primitive_from_template(file, template_file, options);
+    command_name = "ui.append";
+    result = opengil::ui_structure_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
+  } else if (subcommand == "append-many") {
+    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
+    const auto explicit_ids = parse_u64_csv(value_or_empty(args, "entry-ids"), "entry-ids");
+    const size_t count = optional_u64(args, "count")
+        ? require_size(args, "count")
+        : (explicit_ids.empty() ? 1 : explicit_ids.size());
+    if (!explicit_ids.empty() && explicit_ids.size() != count) {
+      throw CliError("USAGE", "--entry-ids count must match --count", EXIT_USAGE);
+    }
+
+    opengil::UiAppendManyOptions options;
+    options.template_primitive_index = optional_u64(args, "template-primitive-index")
+        ? require_size(args, "template-primitive-index")
+        : 0;
+    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
+        ? optional_u64(args, "target-controller-entry-id")
+        : optional_u64(args, "controller-entry-id");
+    options.items.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      opengil::UiAppendManyItem item;
+      if (!explicit_ids.empty()) item.entry_id = explicit_ids[i];
+      options.items.push_back(item);
+    }
+    const auto mutation = opengil::append_many_ui_primitives_from_template(file, template_file, options);
+    command_name = "ui.append-many";
+    result = opengil::ui_structure_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
+  } else if (subcommand == "retain") {
+    const auto primitive_indexes = parse_size_csv(require_value(args, "primitive-indexes"), "primitive-indexes");
+    opengil::UiRetainOptions options;
+    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
+        ? optional_u64(args, "target-controller-entry-id")
+        : optional_u64(args, "controller-entry-id");
+    const auto mutation = opengil::retain_ui_primitives(file, primitive_indexes, options);
+    command_name = "ui.retain";
+    result = opengil::ui_structure_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
+  } else if (subcommand == "copy-transform-from-template") {
+    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
+    opengil::UiCopyTransformFromTemplateOptions options;
+    options.primitive_index = require_size(args, "primitive-index");
+    options.template_primitive_index = optional_u64(args, "template-primitive-index")
+        ? require_size(args, "template-primitive-index")
+        : 0;
+    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
+        ? optional_u64(args, "target-controller-entry-id")
+        : optional_u64(args, "controller-entry-id");
+    const auto mutation = opengil::copy_ui_primitive_transform_from_template(file, template_file, options);
+    command_name = "ui.copy-transform-from-template";
+    result = opengil::ui_structure_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
   } else {
     throw CliError("USAGE", "unsupported ui subcommand: " + subcommand, EXIT_USAGE);
   }
@@ -956,11 +1067,10 @@ std::string handle_ui(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_output_bytes(args, output_path, mutation.bytes);
-    output_json = output_file_json(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, output_bytes);
+    output_json = output_file_json(output_path, output_bytes);
   }
 
-  std::string result = opengil::ui_primitive_patch_summary_to_json(mutation.summary);
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
