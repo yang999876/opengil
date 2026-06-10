@@ -34,7 +34,10 @@ else()
   target_compile_options(opengil_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_executable(opengil src/cli/main.cpp)
+add_executable(opengil
+  src/cli/app.cpp
+  src/cli/main.cpp
+)
 target_link_libraries(opengil PRIVATE opengil_core)
 
 if(MSVC)
