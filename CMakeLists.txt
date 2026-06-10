@@ -37,6 +37,12 @@ endif()
 add_executable(opengil src/cli/main.cpp)
 target_link_libraries(opengil PRIVATE opengil_core)
 
+if(MSVC)
+  target_compile_options(opengil PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(opengil PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 enable_testing()
 
 add_executable(opengil_core_tests tests/unit/test_core.cpp)

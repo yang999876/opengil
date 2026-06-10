@@ -21,7 +21,7 @@ bool is_empty_model_marker(std::span<const uint8_t> group) {
   const std::array<uint32_t, 1> tag_path{1};
   const auto tag = read_varint_path(group, tag_path);
   if (tag != EMPTY_MODEL_TAG_ID) return false;
-  const auto fields = parse_owned_fields(group);
+  const auto fields = parse_owned_fields_or_throw(group, "empty model marker group");
   return std::any_of(fields.begin(), fields.end(), [](const OwnedField& field) {
     return field.number == EMPTY_MODEL_PAYLOAD_FIELD && field.wire == 2;
   });
@@ -91,7 +91,7 @@ std::vector<uint8_t> patch_prefab_top4(
     uint64_t prefab_id,
     uint64_t model_asset_id,
     SetModelSummary& summary) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "model top4");
   bool found = false;
 
   for (auto& field : fields) {
@@ -101,7 +101,7 @@ std::vector<uint8_t> patch_prefab_top4(
     const auto id = read_varint_path(entry_span, id_path);
     if (id != prefab_id) continue;
 
-    auto entry_fields = parse_owned_fields(entry_span);
+    auto entry_fields = parse_owned_fields_or_throw(entry_span, "model prefab entry");
     replace_or_append_varint(entry_fields, 2, model_asset_id);
     field.data = rebuild_message(entry_fields);
     found = true;
@@ -118,7 +118,7 @@ std::vector<uint8_t> patch_scene_like_top(
     uint64_t prefab_id,
     uint64_t model_asset_id,
     size_t& updated_count) {
-  auto fields = parse_owned_fields(top_data);
+  auto fields = parse_owned_fields_or_throw(top_data, "model scene-like top");
   updated_count = 0;
 
   for (auto& field : fields) {
@@ -128,7 +128,7 @@ std::vector<uint8_t> patch_scene_like_top(
     const auto ref = read_varint_path(entry_span, prefab_ref_path);
     if (ref != prefab_id) continue;
 
-    auto entry_fields = parse_owned_fields(entry_span);
+    auto entry_fields = parse_owned_fields_or_throw(entry_span, "model scene-like entry");
     replace_or_append_varint(entry_fields, 8, model_asset_id);
     patch_empty_model_marker(entry_fields, model_asset_id);
     field.data = rebuild_message(entry_fields);

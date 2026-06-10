@@ -92,7 +92,7 @@ bool append_nodegraph_to_carrier(std::vector<OwnedField>& fields, uint32_t carri
   const auto data = std::span<const uint8_t>(carrier.data.data(), carrier.data.size());
   if (carrier_has_nodegraph(data, nodegraph_id)) return false;
 
-  auto carrier_fields = parse_owned_fields(data);
+  auto carrier_fields = parse_owned_fields_or_throw(data, "nodegraph carrier");
   carrier_fields.push_back(make_len_field(13, build_nodegraph_reference_payload(nodegraph_id)));
   carrier.data = rebuild_message(carrier_fields);
   return true;
@@ -121,7 +121,7 @@ std::vector<uint8_t> patch_prefab_top4(
     uint64_t prefab_id,
     uint64_t nodegraph_id,
     AttachNodegraphSummary& summary) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "nodegraph top4");
   bool found = false;
 
   for (auto& field : fields) {
@@ -130,7 +130,7 @@ std::vector<uint8_t> patch_prefab_top4(
     const std::array<uint32_t, 1> id_path{1};
     if (read_varint_path(entry_span, id_path) != prefab_id) continue;
 
-    auto entry_fields = parse_owned_fields(entry_span);
+    auto entry_fields = parse_owned_fields_or_throw(entry_span, "nodegraph prefab entry");
     const auto carrier_index = choose_carrier_index(entry_fields, 7);
     if (!carrier_index) throw std::runtime_error("target prefab does not contain field 7 carrier");
     const auto carrier_span = std::span<const uint8_t>(
@@ -159,7 +159,7 @@ std::vector<uint8_t> patch_scene_like_top(
     uint64_t prefab_id,
     uint64_t nodegraph_id,
     size_t& updated_count) {
-  auto fields = parse_owned_fields(top_data);
+  auto fields = parse_owned_fields_or_throw(top_data, "nodegraph scene-like top");
   updated_count = 0;
 
   for (auto& field : fields) {
@@ -168,7 +168,7 @@ std::vector<uint8_t> patch_scene_like_top(
     const std::array<uint32_t, 2> prefab_ref_path{2, 1};
     if (read_varint_path(entry_span, prefab_ref_path) != prefab_id) continue;
 
-    auto entry_fields = parse_owned_fields(entry_span);
+    auto entry_fields = parse_owned_fields_or_throw(entry_span, "nodegraph scene-like entry");
     if (append_nodegraph_to_carrier(entry_fields, 6, nodegraph_id)) {
       field.data = rebuild_message(entry_fields);
       updated_count++;

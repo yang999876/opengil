@@ -71,13 +71,13 @@ bool set_nested_fixed32_field(
     if (field.number != container_path[0]) continue;
     if (container_path.size() == 1) {
       if (field.wire != 2) continue;
-      auto child_fields = parse_owned_fields(field.data);
+      auto child_fields = parse_owned_fields_or_throw(field.data, "projectile fixed32 child");
       set_fixed32_field_in_message(child_fields, field_number, value);
       field.data = rebuild_message(child_fields);
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "projectile fixed32 child");
     if (set_nested_fixed32_field(child_fields, container_path.subspan(1), field_number, value)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -117,7 +117,7 @@ std::vector<uint8_t> patch_projectile_entry(
     std::span<const uint8_t> entry,
     const ProjectileMotionInput& motion,
     ProjectileMotionSummary& summary) {
-  auto fields = parse_owned_fields(entry);
+  auto fields = parse_owned_fields_or_throw(entry, "projectile prefab entry");
   bool changed = false;
 
   for (auto& field : fields) {
@@ -132,7 +132,7 @@ std::vector<uint8_t> patch_projectile_entry(
     summary.before_y = read_fixed32_path(component, y_path);
     summary.before_gravity = read_fixed32_path(component, gravity_path);
 
-    auto component_fields = parse_owned_fields(component);
+    auto component_fields = parse_owned_fields_or_throw(component, "projectile component");
     const std::array<uint32_t, 4> velocity_container{21, 1, 12, 1};
     const std::array<uint32_t, 3> gravity_container{21, 1, 12};
     if (!set_nested_fixed32_field(component_fields, velocity_container, 1, motion.x)) {
@@ -160,7 +160,7 @@ std::vector<uint8_t> patch_top4_projectile(
     uint64_t prefab_id,
     const ProjectileMotionInput& motion,
     ProjectileMotionSummary& summary) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "projectile top4");
   bool found = false;
 
   for (auto& field : fields) {

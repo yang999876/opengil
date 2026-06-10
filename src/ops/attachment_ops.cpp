@@ -98,7 +98,7 @@ std::vector<uint8_t> upsert_repeated_submessage_in_wrapper(
     uint32_t repeated_field_no,
     const std::string& name,
     const std::vector<uint8_t>& new_item_data) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "attachment wrapper host message");
   bool changed = false;
   const std::array<uint32_t, 1> name_path{1};
 
@@ -106,12 +106,12 @@ std::vector<uint8_t> upsert_repeated_submessage_in_wrapper(
     if (changed || field.number != wrapper_field_no || field.wire != 2) continue;
     if (!wrapper_predicate(std::span<const uint8_t>(field.data.data(), field.data.size()))) continue;
 
-    auto wrapper_fields = parse_owned_fields(field.data);
+    auto wrapper_fields = parse_owned_fields_or_throw(field.data, "attachment wrapper");
     bool wrapper_changed = false;
     for (auto& container_field : wrapper_fields) {
       if (wrapper_changed || container_field.number != container_field_no || container_field.wire != 2) continue;
 
-      auto container_fields = parse_owned_fields(container_field.data);
+      auto container_fields = parse_owned_fields_or_throw(container_field.data, "attachment container");
       bool upserted = false;
       for (auto& item_field : container_fields) {
         if (item_field.number != repeated_field_no || item_field.wire != 2) continue;
@@ -144,7 +144,7 @@ std::vector<uint8_t> find_prefab_entry(std::span<const uint8_t> top4, uint64_t p
 }
 
 std::vector<uint8_t> replace_prefab_entry(std::span<const uint8_t> top4, uint64_t prefab_id, const std::vector<uint8_t>& entry) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "attachment top4");
   const std::array<uint32_t, 1> id_path{1};
   bool changed = false;
   for (auto& field : fields) {
@@ -178,7 +178,7 @@ std::vector<uint8_t> replace_scene_entries(
     std::span<const uint8_t> top8,
     const std::vector<std::vector<uint8_t>>& scene_entries,
     const std::vector<AttachmentPointSpec>& specs) {
-  auto fields = parse_owned_fields(top8);
+  auto fields = parse_owned_fields_or_throw(top8, "attachment top8");
   bool changed = false;
   const std::array<uint32_t, 1> id_path{1};
 

@@ -85,7 +85,7 @@ std::optional<std::vector<uint8_t>> read_bytes_at_path(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path) {
   if (path.empty()) return std::nullopt;
-  const auto fields = parse_owned_fields(message);
+  const auto fields = parse_owned_fields_or_throw(message, "decoration path message");
   for (const auto& field : fields) {
     if (field.number != path[0]) continue;
     if (path.size() == 1) {
@@ -111,7 +111,7 @@ bool set_len_data_at_path(
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "decoration len path child");
     if (set_len_data_at_path(child_fields, path.subspan(1), data)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -124,7 +124,7 @@ std::vector<uint8_t> set_packed_varint_list_at_path(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path,
     const std::vector<uint64_t>& values) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "decoration packed path message");
   if (!set_len_data_at_path(fields, path, encode_packed_varints(values))) {
     throw std::runtime_error("packed varint path not found");
   }
@@ -249,7 +249,7 @@ uint64_t max_top_level_entry_id(std::span<const uint8_t> message) {
   uint64_t max_id = 0;
   bool saw = false;
   const std::array<uint32_t, 1> id_path{1};
-  for (const auto& field : parse_owned_fields(message)) {
+  for (const auto& field : parse_owned_fields_or_throw(message, "decoration top-level id scan")) {
     if (field.wire != 2) continue;
     const auto id = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), id_path);
     if (!id) continue;
@@ -266,7 +266,7 @@ std::vector<uint8_t> replace_repeated_entry(
     std::span<const uint32_t> id_path,
     uint64_t id,
     const std::vector<uint8_t>& next_data) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "decoration repeated entry message");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != repeated_field || field.wire != 2) continue;
@@ -281,7 +281,7 @@ std::vector<uint8_t> replace_repeated_entry(
 std::vector<uint8_t> replace_all_scene_entries(
     std::span<const uint8_t> top8,
     const std::map<uint64_t, std::vector<uint64_t>>& scene_decoration_ids_by_object) {
-  auto fields = parse_owned_fields(top8);
+  auto fields = parse_owned_fields_or_throw(top8, "decoration top8");
   bool changed = false;
   const std::array<uint32_t, 1> object_id_path{1};
   const std::array<uint32_t, 2> packed_path{5, 50};
@@ -306,7 +306,7 @@ std::vector<uint8_t> insert_decoration_entries(
     std::span<const uint8_t> top27,
     const std::vector<std::vector<uint8_t>>& new_field1_entries,
     const std::vector<std::vector<uint8_t>>& new_field2_entries) {
-  auto fields = parse_owned_fields(top27);
+  auto fields = parse_owned_fields_or_throw(top27, "decoration top27");
   if (!new_field1_entries.empty()) {
     auto last = fields.end();
     for (auto it = fields.begin(); it != fields.end(); ++it) {

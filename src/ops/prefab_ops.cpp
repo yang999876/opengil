@@ -59,7 +59,7 @@ bool replace_string_at_path(std::vector<OwnedField>& fields, std::span<const uin
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab string path child");
     if (replace_string_at_path(child_fields, path.subspan(1), text)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -78,7 +78,7 @@ bool replace_varint_at_path(std::vector<OwnedField>& fields, std::span<const uin
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab varint path child");
     if (replace_varint_at_path(child_fields, path.subspan(1), value)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -108,7 +108,7 @@ bool replace_fixed32_at_path(std::vector<OwnedField>& fields, std::span<const ui
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab fixed32 path child");
     if (replace_fixed32_at_path(child_fields, path.subspan(1), value)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -130,7 +130,7 @@ bool set_len_data_at_path(
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab len path child");
     if (set_len_data_at_path(child_fields, path.subspan(1), data)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -156,7 +156,7 @@ std::vector<uint8_t> replace_nested_varint(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path,
     uint64_t value) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "prefab nested varint message");
   if (!replace_varint_at_path(fields, path, value)) {
     throw std::runtime_error("nested varint path not found");
   }
@@ -167,7 +167,7 @@ std::vector<uint8_t> replace_nested_fixed32(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path,
     float value) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "prefab nested fixed32 message");
   if (!replace_fixed32_at_path(fields, path, value)) {
     throw std::runtime_error("nested fixed32 path not found");
   }
@@ -178,7 +178,7 @@ std::optional<std::vector<uint8_t>> read_bytes_at_path(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path) {
   if (path.empty()) return std::nullopt;
-  const auto fields = parse_owned_fields(message);
+  const auto fields = parse_owned_fields_or_throw(message, "prefab bytes path message");
   for (const auto& field : fields) {
     if (field.number != path[0]) continue;
     if (path.size() == 1) {
@@ -228,7 +228,7 @@ std::vector<uint8_t> replace_reference_list_at_path(
   if (next.size() >= 2) next[1] = static_cast<uint64_t>(new_reference_ids.size() * 5);
   next.insert(next.end(), new_reference_ids.begin(), new_reference_ids.end());
 
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "prefab reference list message");
   if (!set_len_data_at_path(fields, path, encode_packed_varints(next))) {
     throw std::runtime_error("reference list path not found");
   }
@@ -239,7 +239,7 @@ std::vector<uint8_t> replace_reference_list_in_joint_wrapper(
     std::span<const uint8_t> message,
     size_t old_reference_count,
     const std::vector<uint64_t>& new_reference_ids) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "prefab joint reference wrapper host");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != 6 || field.wire != 2) continue;
@@ -248,7 +248,7 @@ std::vector<uint8_t> replace_reference_list_in_joint_wrapper(
       continue;
     }
 
-    auto wrapper_fields = parse_owned_fields(field.data);
+    auto wrapper_fields = parse_owned_fields_or_throw(field.data, "prefab joint reference wrapper");
     for (auto& wrapper_field : wrapper_fields) {
       if (wrapper_field.number != 50 || wrapper_field.wire != 2) continue;
       auto packed = decode_packed_varints(wrapper_field.data);
@@ -274,7 +274,7 @@ std::vector<uint8_t> replace_any_reference_list(
     const std::vector<uint64_t>& new_reference_ids) {
   if (old_reference_count == 0) return std::vector<uint8_t>(message.begin(), message.end());
 
-  const auto fields = parse_owned_fields(message);
+  const auto fields = parse_owned_fields_or_throw(message, "prefab reference list probe");
   const std::array<uint32_t, 1> wrapper_tag_path{1};
   const bool has_joint_wrapper = std::any_of(fields.begin(), fields.end(), [&](const OwnedField& field) {
     return field.number == 6 &&
@@ -312,7 +312,7 @@ std::string find_prefab_name(const GilFile& file, uint64_t prefab_id) {
 }
 
 std::vector<uint8_t> patch_top4_name(std::span<const uint8_t> top4, uint64_t prefab_id, const std::string& new_name) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "prefab top4 rename");
   bool found = false;
 
   for (auto& field : fields) {
@@ -322,7 +322,7 @@ std::vector<uint8_t> patch_top4_name(std::span<const uint8_t> top4, uint64_t pre
     const auto id = read_varint_path(entry_span, id_path);
     if (id != prefab_id) continue;
 
-    auto entry_fields = parse_owned_fields(entry_span);
+    auto entry_fields = parse_owned_fields_or_throw(entry_span, "prefab rename entry");
     if (!replace_prefab_name(entry_fields, new_name)) {
       throw std::runtime_error("prefab name path not found");
     }
@@ -488,7 +488,7 @@ std::vector<uint8_t> clone4_entry(
     const std::vector<uint64_t>& new_reference_ids,
     double preview_x,
     double preview_z) {
-  auto fields = parse_owned_fields(source_entry);
+  auto fields = parse_owned_fields_or_throw(source_entry, "prefab clone source entry");
   const std::array<uint32_t, 1> id_path{1};
   if (!replace_varint_at_path(fields, std::span<const uint32_t>(id_path.data(), id_path.size()), new_prefab_id)) {
     throw std::runtime_error("prefab id path not found");
@@ -521,7 +521,7 @@ std::vector<uint8_t> insert_prefab_entry_before_source(
     std::span<const uint8_t> top4,
     uint64_t source_prefab_id,
     std::vector<uint8_t> new_entry) {
-  const auto fields = parse_owned_fields(top4);
+  const auto fields = parse_owned_fields_or_throw(top4, "prefab top4 insertion");
   std::vector<OwnedField> next;
   next.reserve(fields.size() + 1);
   bool inserted = false;
@@ -551,17 +551,17 @@ std::vector<uint8_t> append_mapping_to_category(
     const std::optional<uint64_t>& target_tab_id,
     const std::string& target_tab_name,
     uint64_t new_prefab_id) {
-  auto fields = parse_owned_fields(top6);
+  auto fields = parse_owned_fields_or_throw(top6, "prefab top6 category mappings");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != 1 || field.wire != 2) continue;
     const std::array<uint32_t, 1> category_path{1};
     if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), category_path) != 6) continue;
 
-    auto entry_fields = parse_owned_fields(field.data);
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "prefab top6 category entry");
     for (auto& entry_field : entry_fields) {
       if (changed || entry_field.number != 2 || entry_field.wire != 2) continue;
-      auto root_fields = parse_owned_fields(entry_field.data);
+      auto root_fields = parse_owned_fields_or_throw(entry_field.data, "prefab top6 category root");
       for (auto& root_field : root_fields) {
         if (changed || root_field.number != 4 || root_field.wire != 2) continue;
         const std::span<const uint8_t> child(root_field.data.data(), root_field.data.size());
@@ -573,7 +573,7 @@ std::vector<uint8_t> append_mapping_to_category(
         const bool hit_by_name = !target_tab_id && name && normalize_visible_text(*name) == target_tab_name;
         if (!hit_by_id && !hit_by_name) continue;
 
-        auto child_fields = parse_owned_fields(root_field.data);
+        auto child_fields = parse_owned_fields_or_throw(root_field.data, "prefab top6 category child");
         child_fields.push_back(make_len_field(5, build_prefab_mapping(new_prefab_id)));
         root_field.data = rebuild_message(child_fields);
         entry_field.data = rebuild_message(root_fields);
@@ -589,17 +589,17 @@ std::vector<uint8_t> append_mapping_to_category(
 }
 
 std::vector<uint8_t> append_unclassified_prefab_mapping(std::span<const uint8_t> top6, uint64_t new_prefab_id) {
-  auto fields = parse_owned_fields(top6);
+  auto fields = parse_owned_fields_or_throw(top6, "prefab top6 unclassified mappings");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != 1 || field.wire != 2) continue;
     const std::array<uint32_t, 1> category_path{1};
     if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), category_path) != 3) continue;
 
-    auto entry_fields = parse_owned_fields(field.data);
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "prefab top6 unclassified entry");
     for (auto& entry_field : entry_fields) {
       if (changed || entry_field.number != 3 || entry_field.wire != 2) continue;
-      auto child_fields = parse_owned_fields(entry_field.data);
+      auto child_fields = parse_owned_fields_or_throw(entry_field.data, "prefab top6 unclassified child");
       child_fields.push_back(make_len_field(5, build_prefab_mapping(new_prefab_id)));
       entry_field.data = rebuild_message(child_fields);
       field.data = rebuild_message(entry_fields);
@@ -615,7 +615,7 @@ std::vector<uint8_t> append_cloned_top27_items(
     const std::vector<std::vector<uint8_t>>& source_items,
     const std::vector<uint64_t>& new_decoration_ids,
     uint64_t new_prefab_id) {
-  auto fields = parse_owned_fields(top27);
+  auto fields = parse_owned_fields_or_throw(top27, "prefab top27 clone append");
   for (size_t i = 0; i < source_items.size(); ++i) {
     fields.push_back(make_len_field(1, clone27_item(source_items[i], new_decoration_ids[i], new_prefab_id)));
   }
@@ -623,7 +623,7 @@ std::vector<uint8_t> append_cloned_top27_items(
 }
 
 std::vector<uint8_t> remove_prefab_from_top4(std::span<const uint8_t> top4, uint64_t prefab_id, bool& removed) {
-  auto fields = parse_owned_fields(top4);
+  auto fields = parse_owned_fields_or_throw(top4, "prefab top4 removal");
   std::vector<OwnedField> next;
   const std::array<uint32_t, 1> id_path{1};
   for (auto& field : fields) {
@@ -651,7 +651,7 @@ std::vector<uint64_t> collect_top27_decoration_ids_for_prefab(std::span<const ui
 }
 
 std::vector<uint8_t> remove_top27_entries_for_prefab(std::span<const uint8_t> top27, uint64_t prefab_id) {
-  auto fields = parse_owned_fields(top27);
+  auto fields = parse_owned_fields_or_throw(top27, "prefab top27 removal");
   std::vector<OwnedField> next;
   const std::array<uint32_t, 3> owner_path{4, 50, 502};
   for (auto& field : fields) {
@@ -669,9 +669,16 @@ bool target_ids_contain(const std::set<uint64_t>& target_ids, std::optional<uint
   return value && target_ids.contains(*value);
 }
 
+std::optional<std::vector<OwnedField>> try_parse_owned_message(std::span<const uint8_t> message) {
+  std::vector<Field> parsed;
+  if (!parse_fields(message, parsed)) return std::nullopt;
+  return parse_owned_fields_or_throw(message, "prefab recursive message");
+}
+
 bool has_direct_varint_value(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
-  const auto fields = parse_owned_fields(message);
-  for (const auto& field : fields) {
+  const auto fields = try_parse_owned_message(message);
+  if (!fields) return false;
+  for (const auto& field : *fields) {
     if (field.wire == 0 && target_ids.contains(field.varint)) return true;
   }
   return false;
@@ -682,8 +689,14 @@ struct RecursivePatch {
   bool changed = false;
 };
 
-RecursivePatch strip_mappings_recursive(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
-  auto fields = parse_owned_fields(message);
+RecursivePatch strip_mappings_recursive(
+    std::span<const uint8_t> message,
+    const std::set<uint64_t>& target_ids,
+    size_t depth = 0) {
+  if (depth > 64) throw std::runtime_error("prefab mapping strip recursion exceeded depth limit");
+  auto parsed_fields = try_parse_owned_message(message);
+  if (!parsed_fields) return {std::vector<uint8_t>(message.begin(), message.end()), false};
+  auto fields = std::move(*parsed_fields);
   std::vector<OwnedField> next;
   bool changed = false;
   const std::array<uint32_t, 1> mapped_id_path{2};
@@ -697,7 +710,7 @@ RecursivePatch strip_mappings_recursive(std::span<const uint8_t> message, const 
     }
 
     if (field.wire == 2) {
-      auto nested = strip_mappings_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids);
+      auto nested = strip_mappings_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids, depth + 1);
       if (nested.changed) {
         field.data = std::move(nested.data);
         changed = true;
@@ -712,8 +725,14 @@ RecursivePatch strip_mappings_recursive(std::span<const uint8_t> message, const 
   return patch;
 }
 
-RecursivePatch prune_field10_recursive(std::span<const uint8_t> message, const std::set<uint64_t>& target_ids) {
-  auto fields = parse_owned_fields(message);
+RecursivePatch prune_field10_recursive(
+    std::span<const uint8_t> message,
+    const std::set<uint64_t>& target_ids,
+    size_t depth = 0) {
+  if (depth > 64) throw std::runtime_error("prefab top10 prune recursion exceeded depth limit");
+  auto parsed_fields = try_parse_owned_message(message);
+  if (!parsed_fields) return {std::vector<uint8_t>(message.begin(), message.end()), false};
+  auto fields = std::move(*parsed_fields);
   std::vector<OwnedField> next;
   bool changed = false;
 
@@ -723,7 +742,7 @@ RecursivePatch prune_field10_recursive(std::span<const uint8_t> message, const s
       continue;
     }
 
-    auto nested = prune_field10_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids);
+    auto nested = prune_field10_recursive(std::span<const uint8_t>(field.data.data(), field.data.size()), target_ids, depth + 1);
     if (nested.changed) {
       field.data = std::move(nested.data);
       changed = true;

@@ -375,6 +375,19 @@ std::string envelope(
   return out.str();
 }
 
+std::string append_json_bool_field(std::string json_object, const std::string& key, bool value) {
+  if (json_object.empty() || json_object.back() != '}') {
+    throw CliError("JSON_BUILD_FAILED", "result JSON is not an object", EXIT_PARSE);
+  }
+  json_object.pop_back();
+  json_object += ",";
+  json_object += opengil::json::quote(key);
+  json_object += ":";
+  json_object += opengil::json::bool_value(value);
+  json_object += "}";
+  return json_object;
+}
+
 void write_report_if_requested(const Args& args, const std::string& json) {
   const auto path = value_or_empty(args, "report");
   if (path.empty()) return;
@@ -755,8 +768,7 @@ std::string handle_set_model(const Args& args, bool empty_model) {
 
   std::string result = opengil::set_model_summary_to_json(mutation.model_summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -783,8 +795,7 @@ std::string handle_set_projectile_motion(const Args& args) {
 
   std::string result = opengil::projectile_motion_summary_to_json(mutation.summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -851,8 +862,7 @@ std::string handle_custom_vars(const Args& args) {
 
   std::string result = mutation.result_json;
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -887,8 +897,7 @@ std::string handle_decoration(const Args& args) {
 
   std::string result = opengil::decoration_summary_to_json(mutation.summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope("decoration.add", true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -935,8 +944,7 @@ std::string handle_attachment(const Args& args) {
   }
 
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1072,8 +1080,7 @@ std::string handle_ui(const Args& args) {
   }
 
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1110,8 +1117,7 @@ std::string handle_attach_nodegraph(const Args& args, bool attach_all) {
   }
 
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1138,8 +1144,7 @@ std::string handle_rename_prefab(const Args& args) {
 
   std::string result = opengil::rename_prefab_summary_to_json(mutation.summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1165,8 +1170,7 @@ std::string handle_delete_prefab(const Args& args) {
 
   std::string result = opengil::delete_prefab_summary_to_json(mutation.summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1348,8 +1352,7 @@ std::string handle_create_object(const Args& args) {
 
   std::string result = mutation.result_json;
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1399,8 +1402,7 @@ std::string handle_clone_prefab(const Args& args) {
       ? opengil::copy_prefab_summary_to_json(mutation.summary)
       : opengil::clone_prefab_summary_to_json(mutation.summary);
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
@@ -1430,8 +1432,7 @@ std::string handle_set_transform(const Args& args, bool preview_space) {
 
   std::string result = mutation.result_json;
   if (dry_run) {
-    result.pop_back();
-    result += ",\"dryRun\":true}";
+    result = append_json_bool_field(std::move(result), "dryRun", true);
   }
   const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);

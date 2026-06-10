@@ -162,7 +162,7 @@ int find_custom_variable_component_index(const std::vector<OwnedField>& entry_fi
   for (size_t i = 0; i < entry_fields.size(); ++i) {
     const auto& field = entry_fields[i];
     if (field.number != component_field_no || field.wire != 2) continue;
-    const auto component_fields = parse_owned_fields(field.data);
+    const auto component_fields = parse_owned_fields_or_throw(field.data, "custom vars component candidate");
     if (std::any_of(component_fields.begin(), component_fields.end(), [](const OwnedField& child) {
           return child.number == 11 && child.wire == 2;
         })) {
@@ -174,7 +174,7 @@ int find_custom_variable_component_index(const std::vector<OwnedField>& entry_fi
 
 std::vector<std::vector<uint8_t>> get_custom_variable_entries(std::span<const uint8_t> component) {
   std::vector<std::vector<uint8_t>> entries;
-  const auto component_fields = parse_owned_fields(component);
+  const auto component_fields = parse_owned_fields_or_throw(component, "custom vars component");
   for (const auto& field : component_fields) {
     if (field.number != 11 || field.wire != 2) continue;
     for (const auto& entry_field : len_fields(field.data, 1)) {
@@ -201,7 +201,7 @@ CustomVariableInfo parse_custom_variable_entry(std::span<const uint8_t> entry) {
 std::vector<uint8_t> set_custom_variable_entries(
     std::span<const uint8_t> component,
     const std::vector<std::vector<uint8_t>>& entries) {
-  auto component_fields = parse_owned_fields(component);
+  auto component_fields = parse_owned_fields_or_throw(component, "custom vars component");
   std::vector<OwnedField> entry_fields;
   entry_fields.reserve(entries.size());
   for (const auto& entry : entries) entry_fields.push_back(make_len_field(1, entry));
@@ -228,7 +228,7 @@ std::vector<uint8_t> patch_entry_custom_variables(
     std::span<const uint8_t> entry,
     uint32_t component_field_no,
     const EntryPatcher& patcher) {
-  auto entry_fields = parse_owned_fields(entry);
+  auto entry_fields = parse_owned_fields_or_throw(entry, "custom vars owner entry");
   int component_index = find_custom_variable_component_index(entry_fields, component_field_no);
   if (component_index < 0) {
     entry_fields.push_back(make_len_field(component_field_no, build_empty_custom_variable_component()));
@@ -254,7 +254,7 @@ SyncCounts patch_across_spaces(
   const auto top4_file = file_from_payload(next_payload);
   const auto top4 = top_level_data(top4_file, 4);
   if (!top4) throw std::runtime_error("top-level field 4 not found");
-  auto top4_fields = parse_owned_fields(*top4);
+  auto top4_fields = parse_owned_fields_or_throw(*top4, "custom vars top4");
   bool prefab_changed = false;
   for (auto& field : top4_fields) {
     if (field.number != 1 || field.wire != 2) continue;
@@ -277,7 +277,7 @@ SyncCounts patch_across_spaces(
     const auto temp_file = file_from_payload(next_payload);
     const auto top = top_level_data(temp_file, top_field_no);
     if (!top) return;
-    auto top_fields = parse_owned_fields(*top);
+    auto top_fields = parse_owned_fields_or_throw(*top, "custom vars linked top");
     bool changed = false;
     for (auto& field : top_fields) {
       if (field.number != 1 || field.wire != 2) continue;
@@ -318,7 +318,7 @@ std::optional<std::vector<uint8_t>> find_prefab_entry_data(const GilFile& file, 
 std::vector<std::vector<uint8_t>> raw_custom_entries_from_prefab(const GilFile& file, uint64_t prefab_id) {
   const auto entry = find_prefab_entry_data(file, prefab_id);
   if (!entry) throw std::runtime_error("source prefab id not found");
-  const auto entry_fields = parse_owned_fields(*entry);
+  const auto entry_fields = parse_owned_fields_or_throw(*entry, "custom vars source prefab entry");
   const int component_index = find_custom_variable_component_index(entry_fields, 8);
   if (component_index < 0) return {};
   const auto& component = entry_fields[static_cast<size_t>(component_index)];
@@ -391,7 +391,7 @@ std::vector<PrefabCustomVariables> list_prefab_custom_variables(
     row.prefab_id = *id;
     row.prefab_name = read_prefab_name_from_entry(entry);
 
-    const auto entry_fields = parse_owned_fields(entry);
+    const auto entry_fields = parse_owned_fields_or_throw(entry, "custom vars list prefab entry");
     const int component_index = find_custom_variable_component_index(entry_fields, 8);
     if (component_index >= 0) {
       const auto& component = entry_fields[static_cast<size_t>(component_index)];
