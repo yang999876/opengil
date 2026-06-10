@@ -16,6 +16,11 @@ cmake --build build --config Release
 
 The CLI target is `opengil`.
 
+## Capabilities
+
+For a plain-language overview of what this repository can do, see
+`docs/capabilities.zh.md`.
+
 ## Quick Start
 
 ```powershell
