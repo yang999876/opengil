@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -22,13 +21,6 @@ struct CustomTypeSpec {
   uint64_t type_id = 0;
   uint32_t marker_field = 0;
   std::string name;
-};
-
-struct SyncCounts {
-  size_t prefab_count = 0;
-  size_t scene_count = 0;
-  size_t preview_count = 0;
-  std::vector<uint32_t> changed_top_fields;
 };
 
 const std::map<std::string, CustomTypeSpec>& type_specs_by_name() {
@@ -245,11 +237,11 @@ std::vector<uint8_t> patch_entry_custom_variables(
   return rebuild_message(entry_fields);
 }
 
-SyncCounts patch_across_spaces(
+CustomVarsSummary patch_across_spaces(
     std::vector<uint8_t>& next_payload,
     uint64_t prefab_id,
     const EntryPatcher& patcher) {
-  SyncCounts summary;
+  CustomVarsSummary summary;
 
   const auto top4_file = file_from_payload(next_payload);
   const auto top4 = top_level_data(top4_file, 4);
@@ -263,7 +255,7 @@ SyncCounts patch_across_spaces(
     if (read_varint_path(entry, id_path) != prefab_id) continue;
     field.data = patch_entry_custom_variables(entry, 8, patcher);
     prefab_changed = true;
-    summary.prefab_count++;
+    summary.synchronized.prefab_count++;
     break;
   }
   if (!prefab_changed) throw std::runtime_error("prefab id not found");
@@ -297,8 +289,8 @@ SyncCounts patch_across_spaces(
     }
   };
 
-  patch_linked_top(5, 7, summary.scene_count);
-  patch_linked_top(8, 7, summary.preview_count);
+  patch_linked_top(5, 7, summary.synchronized.scene_count);
+  patch_linked_top(8, 7, summary.synchronized.preview_count);
   return summary;
 }
 
@@ -325,20 +317,6 @@ std::vector<std::vector<uint8_t>> raw_custom_entries_from_prefab(const GilFile& 
   return get_custom_variable_entries(std::span<const uint8_t>(component.data.data(), component.data.size()));
 }
 
-std::string sync_counts_json(const SyncCounts& counts) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabCount\":" << counts.prefab_count << ","
-      << "\"sceneCount\":" << counts.scene_count << ","
-      << "\"previewCount\":" << counts.preview_count
-      << "}";
-  return out.str();
-}
-
-std::string changed_fields_json(const std::vector<uint32_t>& fields) {
-  return json::array_of_numbers(fields);
-}
-
 GilFile file_from_bytes(const GilFile& file, const std::vector<uint8_t>& bytes) {
   GilFile next = file;
   next.bytes = bytes;
@@ -354,12 +332,12 @@ GilFile file_from_payload(std::span<const uint8_t> payload_bytes) {
 CustomVarsMutation finish_mutation(
     const GilFile& file,
     std::vector<uint8_t> payload_bytes,
-    std::string result_json,
+    CustomVarsSummary summary,
     std::vector<uint32_t> changed_top_fields) {
   CustomVarsMutation mutation;
   mutation.payload = std::move(payload_bytes);
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
-  mutation.result_json = std::move(result_json);
+  mutation.summary = std::move(summary);
   mutation.changed_top_fields = std::move(changed_top_fields);
   return mutation;
 }
@@ -426,19 +404,12 @@ CustomVarsMutation add_prefab_custom_variable(
   });
 
   const auto spec = normalize_type(type);
-  std::ostringstream result;
-  result << "{"
-         << "\"kind\":\"customVarsAdd\","
-         << "\"prefabId\":" << prefab_id << ","
-         << "\"prefabName\":" << json::quote(prefab_name_by_id(file, prefab_id)) << ","
-         << "\"variable\":{"
-         << "\"name\":" << json::quote(name) << ","
-         << "\"typeId\":" << spec.type_id << ","
-         << "\"type\":" << json::quote(spec.name)
-         << "},\"synchronized\":" << sync_counts_json(sync) << ","
-         << "\"changedTopFields\":" << changed_fields_json(sync.changed_top_fields)
-         << "}";
-  return finish_mutation(file, std::move(next_payload), result.str(), sync.changed_top_fields);
+  auto summary = sync;
+  summary.kind = "customVarsAdd";
+  summary.prefab_id = prefab_id;
+  summary.prefab_name = prefab_name_by_id(file, prefab_id);
+  summary.variable = CustomVariableInfo{name, spec.type_id, spec.name, std::nullopt};
+  return finish_mutation(file, std::move(next_payload), std::move(summary), sync.changed_top_fields);
 }
 
 CustomVarsMutation remove_prefab_custom_variable(
@@ -466,19 +437,12 @@ CustomVarsMutation remove_prefab_custom_variable(
   });
   if (!removed_any) throw std::runtime_error("custom variable not found: " + name);
 
-  std::ostringstream result;
-  result << "{"
-         << "\"kind\":\"customVarsRemove\","
-         << "\"prefabId\":" << prefab_id << ","
-         << "\"prefabName\":" << json::quote(prefab_name_by_id(file, prefab_id)) << ","
-         << "\"variable\":{"
-         << "\"name\":" << json::quote(removed.name) << ","
-         << "\"typeId\":" << removed.type_id << ","
-         << "\"type\":" << json::quote(removed.type)
-         << "},\"synchronized\":" << sync_counts_json(sync) << ","
-         << "\"changedTopFields\":" << changed_fields_json(sync.changed_top_fields)
-         << "}";
-  return finish_mutation(file, std::move(next_payload), result.str(), sync.changed_top_fields);
+  auto summary = sync;
+  summary.kind = "customVarsRemove";
+  summary.prefab_id = prefab_id;
+  summary.prefab_name = prefab_name_by_id(file, prefab_id);
+  summary.variable = removed;
+  return finish_mutation(file, std::move(next_payload), std::move(summary), sync.changed_top_fields);
 }
 
 CustomVarsMutation copy_prefab_custom_variables(
@@ -491,18 +455,14 @@ CustomVarsMutation copy_prefab_custom_variables(
     return source_entries;
   });
 
-  std::ostringstream result;
-  result << "{"
-         << "\"kind\":\"customVarsCopyAll\","
-         << "\"sourcePrefabId\":" << source_prefab_id << ","
-         << "\"sourcePrefabName\":" << json::quote(prefab_name_by_id(file, source_prefab_id)) << ","
-         << "\"targetPrefabId\":" << target_prefab_id << ","
-         << "\"targetPrefabName\":" << json::quote(prefab_name_by_id(file, target_prefab_id)) << ","
-         << "\"variableCount\":" << source_entries.size() << ","
-         << "\"synchronized\":" << sync_counts_json(sync) << ","
-         << "\"changedTopFields\":" << changed_fields_json(sync.changed_top_fields)
-         << "}";
-  return finish_mutation(file, std::move(next_payload), result.str(), sync.changed_top_fields);
+  auto summary = sync;
+  summary.kind = "customVarsCopyAll";
+  summary.source_prefab_id = source_prefab_id;
+  summary.source_prefab_name = prefab_name_by_id(file, source_prefab_id);
+  summary.target_prefab_id = target_prefab_id;
+  summary.target_prefab_name = prefab_name_by_id(file, target_prefab_id);
+  summary.variable_count = source_entries.size();
+  return finish_mutation(file, std::move(next_payload), std::move(summary), sync.changed_top_fields);
 }
 
 CustomVarsMutation sync_tab_custom_variables_impl(
@@ -513,7 +473,7 @@ CustomVarsMutation sync_tab_custom_variables_impl(
   const auto source_entries = raw_custom_entries_from_prefab(file, source_prefab_id);
   GilFile current = file;
   std::vector<uint8_t> final_bytes = file.bytes;
-  std::vector<std::string> item_jsons;
+  std::vector<CustomVarsSummary> items;
   std::set<uint32_t> changed_fields;
 
   std::set<uint64_t> target_ids;
@@ -530,39 +490,21 @@ CustomVarsMutation sync_tab_custom_variables_impl(
     final_bytes = mutation.bytes;
     current = file_from_bytes(file, final_bytes);
     for (uint32_t field : mutation.changed_top_fields) changed_fields.insert(field);
-    item_jsons.push_back(mutation.result_json);
+    items.push_back(mutation.summary);
   }
-
-  std::ostringstream changed_json;
-  changed_json << "[";
-  size_t idx = 0;
-  for (uint32_t field : changed_fields) {
-    if (idx++) changed_json << ",";
-    changed_json << field;
-  }
-  changed_json << "]";
-
-  std::ostringstream result;
-  result << "{"
-         << "\"kind\":\"customVarsSyncTab\","
-         << "\"sourcePrefabId\":" << source_prefab_id << ","
-         << "\"sourcePrefabName\":" << json::quote(prefab_name_by_id(file, source_prefab_id)) << ","
-         << "\"sourceVariableCount\":" << source_entries.size() << ","
-         << "\"tab\":" << json::quote(tab_label) << ","
-         << "\"targetCount\":" << targets.size() << ","
-         << "\"changedTopFields\":" << changed_json.str() << ","
-         << "\"items\":[";
-  for (size_t i = 0; i < item_jsons.size(); ++i) {
-    if (i) result << ",";
-    result << item_jsons[i];
-  }
-  result << "]}";
 
   CustomVarsMutation mutation;
   mutation.bytes = std::move(final_bytes);
   mutation.payload = std::vector<uint8_t>(payload(current).begin(), payload(current).end());
-  mutation.result_json = result.str();
+  mutation.summary.kind = "customVarsSyncTab";
+  mutation.summary.source_prefab_id = source_prefab_id;
+  mutation.summary.source_prefab_name = prefab_name_by_id(file, source_prefab_id);
+  mutation.summary.source_variable_count = source_entries.size();
+  mutation.summary.tab = tab_label;
+  mutation.summary.target_count = targets.size();
+  mutation.summary.items = std::move(items);
   mutation.changed_top_fields.assign(changed_fields.begin(), changed_fields.end());
+  mutation.summary.changed_top_fields = mutation.changed_top_fields;
   return mutation;
 }
 
@@ -586,31 +528,6 @@ CustomVarsMutation sync_tab_custom_variables_by_tab_id(
       source_prefab_id,
       std::to_string(tab_id),
       [&](const TabInfo& tab) { return tab.id && *tab.id == tab_id; });
-}
-
-std::string custom_variables_list_to_json(const std::vector<PrefabCustomVariables>& rows) {
-  std::ostringstream out;
-  out << "{\"count\":" << rows.size() << ",\"items\":[";
-  for (size_t i = 0; i < rows.size(); ++i) {
-    if (i) out << ",";
-    out << "{"
-        << "\"prefabId\":" << rows[i].prefab_id << ","
-        << "\"prefabName\":" << json::quote(rows[i].prefab_name) << ","
-        << "\"variables\":[";
-    for (size_t j = 0; j < rows[i].variables.size(); ++j) {
-      if (j) out << ",";
-      const auto& variable = rows[i].variables[j];
-      out << "{"
-          << "\"name\":" << json::quote(variable.name) << ","
-          << "\"typeId\":" << variable.type_id << ","
-          << "\"type\":" << json::quote(variable.type) << ","
-          << "\"enabled\":" << (variable.enabled ? json::number(*variable.enabled) : "null")
-          << "}";
-    }
-    out << "]}";
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

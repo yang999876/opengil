@@ -4,12 +4,9 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <iomanip>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -177,19 +174,6 @@ std::vector<uint8_t> patch_top4_projectile(
   return rebuild_message(fields);
 }
 
-std::string optional_float_json(const std::optional<float>& value) {
-  if (!value) return "null";
-  std::ostringstream out;
-  out << std::setprecision(9) << *value;
-  return out.str();
-}
-
-std::string float_json(float value) {
-  std::ostringstream out;
-  out << std::setprecision(9) << value;
-  return out.str();
-}
-
 }  // namespace
 
 ProjectileMotionInput projectile_motion_from_angle(float angle_deg, float speed, std::optional<float> gravity) {
@@ -224,24 +208,6 @@ ProjectileMutation set_prefab_projectile_motion(
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);
   return mutation;
-}
-
-std::string projectile_motion_summary_to_json(const ProjectileMotionSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"prefabName\":" << json::quote(summary.prefab_name) << ","
-      << "\"before\":{"
-      << "\"x\":" << optional_float_json(summary.before_x) << ","
-      << "\"y\":" << optional_float_json(summary.before_y) << ","
-      << "\"gravity\":" << optional_float_json(summary.before_gravity)
-      << "},\"after\":{"
-      << "\"x\":" << float_json(summary.after_x) << ","
-      << "\"y\":" << float_json(summary.after_y) << ","
-      << "\"gravity\":" << optional_float_json(summary.after_gravity)
-      << "},\"changedTopFields\":" << json::array_of_numbers(summary.changed_top_fields)
-      << "}";
-  return out.str();
 }
 
 }  // namespace opengil

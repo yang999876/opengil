@@ -14,6 +14,4 @@ AttachmentMutation add_attachment_points_from_decorations(
     uint64_t prefab_id,
     std::optional<uint64_t> object_id = std::nullopt);
 
-std::string attachment_from_decoration_summary_to_json(const AttachmentSummary& summary);
-
 }  // namespace opengil

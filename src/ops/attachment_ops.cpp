@@ -5,11 +5,9 @@
 #include <functional>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -230,17 +228,6 @@ std::vector<uint8_t> replace_scene_entries(
   return changed ? rebuild_message(fields) : std::vector<uint8_t>(top8.begin(), top8.end());
 }
 
-std::string string_array_json(const std::vector<std::string>& values) {
-  std::ostringstream out;
-  out << "[";
-  for (size_t i = 0; i < values.size(); ++i) {
-    if (i) out << ",";
-    out << json::quote(values[i]);
-  }
-  out << "]";
-  return out.str();
-}
-
 }  // namespace
 
 AttachmentMutation add_attachment_points(
@@ -310,28 +297,6 @@ AttachmentMutation add_attachment_points(
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);
   return mutation;
-}
-
-std::string attachment_summary_to_json(const AttachmentSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"attachmentAdd\","
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"objectId\":";
-  if (summary.object_id) {
-    out << *summary.object_id;
-  } else {
-    out << "null";
-  }
-  out << ",\"sceneInstanceCount\":" << summary.scene_instance_count << ","
-      << "\"names\":" << string_array_json(summary.names) << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

@@ -5,13 +5,11 @@
 #include <optional>
 #include <regex>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "opengil/json.hpp"
 #include "opengil/wire.hpp"
 
 namespace opengil {
@@ -205,17 +203,6 @@ std::vector<AttachmentPointSpec> derive_attachment_specs(std::span<const uint8_t
   return {left_hand_spec, head_spec};
 }
 
-std::string string_array_json(const std::vector<std::string>& values) {
-  std::ostringstream out;
-  out << "[";
-  for (size_t i = 0; i < values.size(); ++i) {
-    if (i) out << ",";
-    out << json::quote(values[i]);
-  }
-  out << "]";
-  return out.str();
-}
-
 }  // namespace
 
 AttachmentMutation add_attachment_points_from_decorations(
@@ -232,28 +219,6 @@ AttachmentMutation add_attachment_points_from_decorations(
   const auto decorations = collect_decorations(*top27, prefab_id);
   const auto specs = derive_attachment_specs(prefab_entry, decorations);
   return add_attachment_points(file, prefab_id, object_id, specs);
-}
-
-std::string attachment_from_decoration_summary_to_json(const AttachmentSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"attachmentFromDecoration\","
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"objectId\":";
-  if (summary.object_id) {
-    out << *summary.object_id;
-  } else {
-    out << "null";
-  }
-  out << ",\"sceneInstanceCount\":" << summary.scene_instance_count << ","
-      << "\"names\":" << string_array_json(summary.names) << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

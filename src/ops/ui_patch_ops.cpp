@@ -5,11 +5,9 @@
 #include <functional>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/wire.hpp"
 
 namespace opengil {
@@ -196,63 +194,6 @@ UiPrimitivePatchMutation patch_ui_primitive(
   return mutation;
 }
 
-void append_optional_number(std::ostringstream& out, const auto& value) {
-  if (value) {
-    out << *value;
-  } else {
-    out << "null";
-  }
-}
-
-void append_optional_string(std::ostringstream& out, const std::optional<std::string>& value) {
-  if (value) {
-    out << json::quote(*value);
-  } else {
-    out << "null";
-  }
-}
-
-void append_vec2_json(std::ostringstream& out, const UiVec2& value, const char* x_name, const char* y_name) {
-  out << "{" << json::quote(x_name) << ":";
-  append_optional_number(out, value.x);
-  out << "," << json::quote(y_name) << ":";
-  append_optional_number(out, value.y);
-  out << "}";
-}
-
-void append_vec3_json(std::ostringstream& out, const UiVec3& value) {
-  out << "{\"x\":";
-  append_optional_number(out, value.x);
-  out << ",\"y\":";
-  append_optional_number(out, value.y);
-  out << ",\"z\":";
-  append_optional_number(out, value.z);
-  out << "}";
-}
-
-void append_primitive_json(std::ostringstream& out, const UiPrimitive& primitive) {
-  out << "{\"primitiveIndex\":" << primitive.primitive_index
-      << ",\"entryId\":";
-  append_optional_number(out, primitive.entry_id);
-  out << ",\"name\":";
-  append_optional_string(out, primitive.name);
-  out << ",\"primitiveTypeId\":";
-  append_optional_number(out, primitive.primitive_type_id);
-  out << ",\"color\":";
-  append_optional_number(out, primitive.color);
-  out << ",\"layer\":";
-  append_optional_number(out, primitive.layer);
-  out << ",\"transform\":{\"position\":";
-  append_vec2_json(out, primitive.transform.position, "x", "y");
-  out << ",\"size\":";
-  append_vec2_json(out, primitive.transform.size, "w", "h");
-  out << ",\"scale\":";
-  append_vec3_json(out, primitive.transform.scale);
-  out << ",\"rotationZ\":";
-  append_optional_number(out, primitive.transform.rotation_z);
-  out << "}}";
-}
-
 }  // namespace
 
 UiPrimitivePatchMutation set_ui_primitive_type(
@@ -382,20 +323,6 @@ UiPrimitivePatchMutation set_ui_primitive_name(
     }
     return rebuild_message(fields);
   });
-}
-
-std::string ui_primitive_patch_summary_to_json(const UiPrimitivePatchSummary& summary) {
-  std::ostringstream out;
-  out << "{\"kind\":" << json::quote(summary.kind)
-      << ",\"primitiveIndex\":" << summary.primitive_index
-      << ",\"entryId\":";
-  append_optional_number(out, summary.entry_id);
-  out << ",\"before\":";
-  append_primitive_json(out, summary.before);
-  out << ",\"after\":";
-  append_primitive_json(out, summary.after);
-  out << ",\"changedTopFields\":[9]}";
-  return out.str();
 }
 
 }  // namespace opengil

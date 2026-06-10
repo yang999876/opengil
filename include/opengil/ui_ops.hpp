@@ -57,6 +57,4 @@ UiPrimitiveList list_ui_primitives(
     const GilFile& file,
     uint64_t controller_entry_id = kDefaultUiPrimitiveControllerEntryId);
 
-std::string ui_primitive_list_to_json(const UiPrimitiveList& list);
-
 }  // namespace opengil

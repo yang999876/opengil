@@ -146,10 +146,5 @@ int main() {
   OPENGIL_CHECK(primitive.transform.scale.z == 3.0);
   OPENGIL_CHECK(primitive.transform.rotation_z == 45.0);
 
-  const auto json = opengil::ui_primitive_list_to_json(list);
-  OPENGIL_CHECK(json.find("\"kind\":\"uiPrimitiveList\"") != std::string::npos);
-  OPENGIL_CHECK(json.find("\"primitiveCount\":1") != std::string::npos);
-  OPENGIL_CHECK(json.find("\"name\":\"rect\"") != std::string::npos);
-
   return 0;
 }

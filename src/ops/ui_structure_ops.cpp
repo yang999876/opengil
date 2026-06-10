@@ -3,14 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "opengil/json.hpp"
 #include "opengil/wire.hpp"
 
 namespace opengil {
@@ -415,17 +413,6 @@ std::optional<uint64_t> direct_controller_id(const Top9Entry& primitive) {
   return read_varint_path(bytes_span(primitive.data), path);
 }
 
-std::string uint64_array_json(const std::vector<uint64_t>& values) {
-  std::ostringstream out;
-  out << "[";
-  for (size_t i = 0; i < values.size(); ++i) {
-    if (i) out << ",";
-    out << values[i];
-  }
-  out << "]";
-  return out.str();
-}
-
 }  // namespace
 
 UiStructureMutation append_ui_primitive_from_template(
@@ -562,17 +549,6 @@ UiStructureMutation copy_ui_primitive_transform_from_template(
   auto summary = summary_for_result("copyUiPrimitiveTransformFromTemplate", result_file, target_controller_id);
   summary.entry_ids = {target.entry_id};
   return make_mutation(file, std::move(next_payload), std::move(summary));
-}
-
-std::string ui_structure_summary_to_json(const UiStructureSummary& summary) {
-  std::ostringstream out;
-  out << "{\"kind\":" << json::quote(summary.kind)
-      << ",\"targetControllerEntryId\":" << summary.target_controller_entry_id
-      << ",\"primitiveCount\":" << summary.primitive_count
-      << ",\"entryIds\":" << uint64_array_json(summary.entry_ids)
-      << ",\"changedTopFields\":" << json::array_of_numbers(summary.changed_top_fields)
-      << "}";
-  return out.str();
 }
 
 }  // namespace opengil

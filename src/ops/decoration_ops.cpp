@@ -6,11 +6,9 @@
 #include <map>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -330,17 +328,6 @@ std::vector<uint8_t> insert_decoration_entries(
   return rebuild_message(fields);
 }
 
-std::string id_array_json(const std::vector<uint64_t>& values) {
-  std::ostringstream out;
-  out << "[";
-  for (size_t i = 0; i < values.size(); ++i) {
-    if (i) out << ",";
-    out << values[i];
-  }
-  out << "]";
-  return out.str();
-}
-
 }  // namespace
 
 DecorationMutation add_prefab_decorations(
@@ -433,25 +420,6 @@ DecorationMutation add_prefab_decorations(
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);
   return mutation;
-}
-
-std::string decoration_summary_to_json(const DecorationSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"decorationAdd\","
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"sceneInstanceCount\":" << summary.scene_instance_count << ","
-      << "\"addedPrefabDecorations\":" << summary.prefab_decoration_ids.size() << ","
-      << "\"addedSceneDecorations\":" << summary.scene_decoration_ids.size() << ","
-      << "\"prefabDecorationIds\":" << id_array_json(summary.prefab_decoration_ids) << ","
-      << "\"sceneDecorationIds\":" << id_array_json(summary.scene_decoration_ids) << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

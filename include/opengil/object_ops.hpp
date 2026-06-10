@@ -28,10 +28,19 @@ struct TransformSummary {
   std::vector<uint32_t> changed_top_fields;
 };
 
+struct ObjectSummary {
+  std::string kind;
+  std::optional<uint64_t> object_id;
+  std::optional<uint64_t> prefab_id;
+  std::optional<uint64_t> asset_id;
+  Transform transform;
+  std::vector<uint32_t> changed_top_fields;
+};
+
 struct ObjectMutation {
   std::vector<uint8_t> bytes;
   std::vector<uint8_t> payload;
-  std::string result_json;
+  ObjectSummary summary;
   std::vector<uint32_t> changed_top_fields;
 };
 
@@ -65,7 +74,5 @@ ObjectMutation create_scene_prefab_instance(
 
 ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
-
-std::string transform_summary_to_json(const TransformSummary& summary);
 
 }  // namespace opengil

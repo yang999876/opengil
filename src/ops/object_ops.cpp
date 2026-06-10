@@ -3,12 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -333,7 +331,7 @@ ObjectMutation set_space_transform(
   if (!changed) throw std::runtime_error("object id not found");
 
   auto next_payload = replace_top_level_field_data(payload(file), top_field_number, rebuild_message(fields));
-  TransformSummary summary;
+  ObjectSummary summary;
   summary.kind = std::move(kind);
   summary.object_id = object_id;
   summary.transform = transform;
@@ -342,104 +340,67 @@ ObjectMutation set_space_transform(
   ObjectMutation mutation;
   mutation.payload = std::move(next_payload);
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
-  mutation.result_json = transform_summary_to_json(summary);
+  mutation.summary = summary;
   mutation.changed_top_fields = std::move(summary.changed_top_fields);
   return mutation;
-}
-
-std::string vec3_json(const Vec3& value) {
-  std::ostringstream out;
-  out << "{"
-      << "\"x\":" << value.x << ","
-      << "\"y\":" << value.y << ","
-      << "\"z\":" << value.z
-      << "}";
-  return out.str();
-}
-
-std::string transform_json(const Transform& transform) {
-  std::ostringstream out;
-  out << "{"
-      << "\"position\":" << vec3_json(transform.position) << ","
-      << "\"rotation\":" << vec3_json(transform.rotation) << ","
-      << "\"scale\":" << vec3_json(transform.scale)
-      << "}";
-  return out.str();
-}
-
-std::string changed_top_fields_json(const std::vector<uint32_t>& fields) {
-  std::ostringstream out;
-  out << "[";
-  for (size_t i = 0; i < fields.size(); ++i) {
-    if (i) out << ",";
-    out << fields[i];
-  }
-  out << "]";
-  return out.str();
 }
 
 ObjectMutation make_object_mutation(
     const GilFile& file,
     std::vector<uint8_t> next_payload,
-    std::string result_json,
+    ObjectSummary summary,
     std::vector<uint32_t> changed_top_fields) {
   ObjectMutation mutation;
   mutation.payload = std::move(next_payload);
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
-  mutation.result_json = std::move(result_json);
+  mutation.summary = std::move(summary);
   mutation.changed_top_fields = std::move(changed_top_fields);
   return mutation;
 }
 
-std::string create_scene_object_result_json(
-    std::string_view kind,
+ObjectSummary create_scene_object_summary(
+    std::string kind,
     uint64_t object_id,
     uint64_t asset_id,
     const Transform& transform,
     const std::vector<uint32_t>& changed_top_fields) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":" << json::quote(std::string(kind)) << ","
-      << "\"objectId\":" << object_id << ","
-      << "\"assetId\":" << asset_id << ","
-      << "\"transform\":" << transform_json(transform) << ","
-      << "\"changedTopFields\":" << changed_top_fields_json(changed_top_fields)
-      << "}";
-  return out.str();
+  ObjectSummary summary;
+  summary.kind = std::move(kind);
+  summary.object_id = object_id;
+  summary.asset_id = asset_id;
+  summary.transform = transform;
+  summary.changed_top_fields = changed_top_fields;
+  return summary;
 }
 
-std::string create_prefab_result_json(
+ObjectSummary create_prefab_summary(
     uint64_t prefab_id,
     uint64_t asset_id,
     const Transform& transform,
     const std::vector<uint32_t>& changed_top_fields) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"prefab\","
-      << "\"prefabId\":" << prefab_id << ","
-      << "\"assetId\":" << asset_id << ","
-      << "\"transform\":" << transform_json(transform) << ","
-      << "\"changedTopFields\":" << changed_top_fields_json(changed_top_fields)
-      << "}";
-  return out.str();
+  ObjectSummary summary;
+  summary.kind = "prefab";
+  summary.prefab_id = prefab_id;
+  summary.asset_id = asset_id;
+  summary.transform = transform;
+  summary.changed_top_fields = changed_top_fields;
+  return summary;
 }
 
-std::string create_scene_prefab_instance_result_json(
+ObjectSummary create_scene_prefab_instance_summary(
     uint64_t object_id,
     uint64_t prefab_id,
     uint64_t asset_id,
     const Transform& transform,
     const std::vector<uint32_t>& changed_top_fields) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"scenePrefabInstance\","
-      << "\"objectId\":" << object_id << ","
-      << "\"prefabId\":" << prefab_id << ","
-      << "\"assetId\":" << asset_id << ","
-      << "\"transform\":" << transform_json(transform) << ","
-      << "\"changedTopFields\":" << changed_top_fields_json(changed_top_fields)
-      << "}";
-  return out.str();
+  ObjectSummary summary;
+  summary.kind = "scenePrefabInstance";
+  summary.object_id = object_id;
+  summary.prefab_id = prefab_id;
+  summary.asset_id = asset_id;
+  summary.transform = transform;
+  summary.changed_top_fields = changed_top_fields;
+  return summary;
 }
 
 }  // namespace
@@ -462,8 +423,8 @@ ObjectMutation create_scene_object(const GilFile& file, uint64_t asset_id, const
   auto next_payload = replace_top_level_field_data(payload(file), 5, append_repeated_entry(*top5, 1, std::move(entry)));
   next_payload = patch_top6_mapping(next_payload, 200, object_id, {3}, changed_top_fields);
 
-  auto result = create_scene_object_result_json("sceneObject", object_id, asset_id, options.transform, changed_top_fields);
-  return make_object_mutation(file, std::move(next_payload), std::move(result), std::move(changed_top_fields));
+  auto summary = create_scene_object_summary("sceneObject", object_id, asset_id, options.transform, changed_top_fields);
+  return make_object_mutation(file, std::move(next_payload), std::move(summary), std::move(changed_top_fields));
 }
 
 ObjectMutation create_prefab(
@@ -487,8 +448,8 @@ ObjectMutation create_prefab(
   auto next_payload = replace_top_level_field_data(payload(file), 4, append_repeated_entry(*top4, 1, std::move(entry)));
   next_payload = patch_top6_mapping(next_payload, 100, prefab_id, {6, 3}, changed_top_fields);
 
-  auto result = create_prefab_result_json(prefab_id, asset_id, options.transform, changed_top_fields);
-  return make_object_mutation(file, std::move(next_payload), std::move(result), std::move(changed_top_fields));
+  auto summary = create_prefab_summary(prefab_id, asset_id, options.transform, changed_top_fields);
+  return make_object_mutation(file, std::move(next_payload), std::move(summary), std::move(changed_top_fields));
 }
 
 ObjectMutation create_scene_prefab_instance(
@@ -515,13 +476,13 @@ ObjectMutation create_scene_prefab_instance(
   auto next_payload = replace_top_level_field_data(payload(file), 5, append_repeated_entry(*top5, 1, std::move(entry)));
   next_payload = patch_top6_mapping(next_payload, 200, object_id, {3}, changed_top_fields);
 
-  auto result = create_scene_prefab_instance_result_json(
+  auto summary = create_scene_prefab_instance_summary(
       object_id,
       prefab_id,
       asset_id,
       options.transform,
       changed_top_fields);
-  return make_object_mutation(file, std::move(next_payload), std::move(result), std::move(changed_top_fields));
+  return make_object_mutation(file, std::move(next_payload), std::move(summary), std::move(changed_top_fields));
 }
 
 ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, const Transform& transform) {
@@ -530,21 +491,6 @@ ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, cons
 
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform) {
   return set_space_transform(file, 8, 6, "previewTransform", object_id, transform);
-}
-
-std::string transform_summary_to_json(const TransformSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":" << json::quote(summary.kind) << ","
-      << "\"objectId\":" << summary.object_id << ","
-      << "\"transform\":" << transform_json(summary.transform) << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

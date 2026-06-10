@@ -47,11 +47,4 @@ std::vector<TabInfo> list_prefab_tabs(const GilFile& file, uint64_t prefab_id);
 std::optional<ModelInfo> get_model_info(const GilFile& file, uint64_t prefab_id);
 std::vector<NodeGraphInfo> list_nodegraphs(const GilFile& file);
 
-std::string tabs_to_json(const std::vector<TabInfo>& tabs);
-std::string prefabs_to_json(const std::vector<PrefabInfo>& prefabs);
-std::string prefab_tabs_to_json(const std::vector<TabInfo>& tabs);
-std::string model_info_to_json(const ModelInfo& info);
-std::string nodegraphs_to_json(const std::vector<NodeGraphInfo>& graphs);
-
 }  // namespace opengil
-

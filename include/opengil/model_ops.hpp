@@ -31,7 +31,4 @@ struct GilMutation {
 GilMutation set_prefab_model_asset_id(const GilFile& file, uint64_t prefab_id, uint64_t model_asset_id);
 GilMutation set_prefab_to_empty_model(const GilFile& file, uint64_t prefab_id);
 
-std::string set_model_summary_to_json(const SetModelSummary& summary);
-
 }  // namespace opengil
-

@@ -274,9 +274,6 @@ int main() {
   OPENGIL_CHECK((mutation.summary.names == std::vector<std::string>{left_hand_name(), head_name()}));
   OPENGIL_CHECK((mutation.summary.changed_top_fields == std::vector<uint32_t>{4, 8}));
 
-  const auto json = opengil::attachment_from_decoration_summary_to_json(mutation.summary);
-  OPENGIL_CHECK(json.find("\"kind\":\"attachmentFromDecoration\"") != std::string::npos);
-
   const auto changed = load_mutation_as_file(mutation);
   OPENGIL_CHECK(opengil::validate_gil(changed).ok);
   const auto changed_top27 = opengil::top_level_data(changed, 27);

@@ -56,6 +56,4 @@ UiPrimitivePatchMutation set_ui_primitive_name(
     const std::string& name,
     uint64_t controller_entry_id = kDefaultUiPrimitiveControllerEntryId);
 
-std::string ui_primitive_patch_summary_to_json(const UiPrimitivePatchSummary& summary);
-
 }  // namespace opengil

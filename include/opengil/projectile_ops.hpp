@@ -39,6 +39,4 @@ ProjectileMutation set_prefab_projectile_motion(
     uint64_t prefab_id,
     const ProjectileMotionInput& motion);
 
-std::string projectile_motion_summary_to_json(const ProjectileMotionSummary& summary);
-
 }  // namespace opengil

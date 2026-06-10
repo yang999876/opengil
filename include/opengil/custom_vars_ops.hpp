@@ -22,10 +22,34 @@ struct PrefabCustomVariables {
   std::vector<CustomVariableInfo> variables;
 };
 
+struct CustomVarsSyncCounts {
+  size_t prefab_count = 0;
+  size_t scene_count = 0;
+  size_t preview_count = 0;
+};
+
+struct CustomVarsSummary {
+  std::string kind;
+  std::optional<uint64_t> prefab_id;
+  std::string prefab_name;
+  std::optional<uint64_t> source_prefab_id;
+  std::string source_prefab_name;
+  std::optional<uint64_t> target_prefab_id;
+  std::string target_prefab_name;
+  std::optional<CustomVariableInfo> variable;
+  size_t variable_count = 0;
+  size_t source_variable_count = 0;
+  std::string tab;
+  size_t target_count = 0;
+  CustomVarsSyncCounts synchronized;
+  std::vector<CustomVarsSummary> items;
+  std::vector<uint32_t> changed_top_fields;
+};
+
 struct CustomVarsMutation {
   std::vector<uint8_t> bytes;
   std::vector<uint8_t> payload;
-  std::string result_json;
+  CustomVarsSummary summary;
   std::vector<uint32_t> changed_top_fields;
 };
 
@@ -58,7 +82,5 @@ CustomVarsMutation sync_tab_custom_variables_by_tab_id(
     const GilFile& file,
     uint64_t source_prefab_id,
     uint64_t tab_id);
-
-std::string custom_variables_list_to_json(const std::vector<PrefabCustomVariables>& rows);
 
 }  // namespace opengil

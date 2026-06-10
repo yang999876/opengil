@@ -103,7 +103,11 @@ int main() {
   OPENGIL_CHECK(added.changed_top_fields.size() == 2);
   OPENGIL_CHECK(added.changed_top_fields[0] == 4);
   OPENGIL_CHECK(added.changed_top_fields[1] == 5);
-  OPENGIL_CHECK(added.result_json.find("\"sceneCount\":1") != std::string::npos);
+  OPENGIL_CHECK(added.summary.kind == "customVarsAdd");
+  OPENGIL_CHECK(added.summary.prefab_id == 101);
+  OPENGIL_CHECK(added.summary.variable);
+  OPENGIL_CHECK(added.summary.variable->name == "openGilVar");
+  OPENGIL_CHECK(added.summary.synchronized.scene_count == 1);
 
   const auto added_file = load_mutation_as_file(added, "opengil-test-custom-vars-add.gil");
   OPENGIL_CHECK(opengil::validate_gil(added_file).ok);
@@ -117,7 +121,10 @@ int main() {
   OPENGIL_CHECK(find_row(after_add, 202).variables.empty());
 
   const auto copied = opengil::copy_prefab_custom_variables(added_file, 101, 202);
-  OPENGIL_CHECK(copied.result_json.find("\"variableCount\":1") != std::string::npos);
+  OPENGIL_CHECK(copied.summary.kind == "customVarsCopyAll");
+  OPENGIL_CHECK(copied.summary.source_prefab_id == 101);
+  OPENGIL_CHECK(copied.summary.target_prefab_id == 202);
+  OPENGIL_CHECK(copied.summary.variable_count == 1);
   const auto copied_file = load_mutation_as_file(copied, "opengil-test-custom-vars-copy.gil");
   OPENGIL_CHECK(opengil::validate_gil(copied_file).ok);
   const auto after_copy = opengil::list_prefab_custom_variables(copied_file);

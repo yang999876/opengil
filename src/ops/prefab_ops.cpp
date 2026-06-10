@@ -4,15 +4,11 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <iomanip>
 #include <optional>
 #include <set>
-#include <sstream>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -990,79 +986,6 @@ PrefabDeleteMutation delete_prefab(const GilFile& file, uint64_t prefab_id) {
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);
   return mutation;
-}
-
-std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"beforeName\":" << json::quote(summary.before_name) << ","
-      << "\"afterName\":" << json::quote(summary.after_name) << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string delete_prefab_summary_to_json(const DeletePrefabSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":\"deletePrefab\","
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"removedDecorationIds\":[";
-  for (size_t i = 0; i < summary.removed_decoration_ids.size(); ++i) {
-    if (i) out << ",";
-    out << summary.removed_decoration_ids[i];
-  }
-  out << "],\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string clone_prefab_summary_to_json_with_kind(const ClonePrefabSummary& summary, std::string_view kind) {
-  std::ostringstream preview_x;
-  preview_x << std::fixed << std::setprecision(6) << summary.preview_x;
-  std::ostringstream preview_z;
-  preview_z << std::fixed << std::setprecision(6) << summary.preview_z;
-
-  std::ostringstream out;
-  out << "{"
-      << "\"kind\":" << json::quote(std::string(kind)) << ","
-      << "\"sourcePrefabId\":" << summary.source_prefab_id << ","
-      << "\"sourceName\":" << json::quote(summary.source_name) << ","
-      << "\"newPrefabId\":" << summary.new_prefab_id << ","
-      << "\"newPrefabName\":" << json::quote(summary.new_prefab_name) << ","
-      << "\"targetTab\":{"
-      << "\"id\":" << (summary.target_tab_id ? json::number(*summary.target_tab_id) : "null") << ","
-      << "\"name\":" << json::quote(summary.target_tab_name)
-      << "},"
-      << "\"clonedDecorationCount\":" << summary.cloned_decoration_count << ","
-      << "\"previewPos\":{"
-      << "\"x\":" << preview_x.str() << ","
-      << "\"z\":" << preview_z.str()
-      << "},"
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary) {
-  return clone_prefab_summary_to_json_with_kind(summary, "clonePrefab");
-}
-
-std::string copy_prefab_summary_to_json(const ClonePrefabSummary& summary) {
-  return clone_prefab_summary_to_json_with_kind(summary, "copyPrefabToTab");
 }
 
 }  // namespace opengil

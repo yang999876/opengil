@@ -34,6 +34,4 @@ DecorationMutation add_prefab_decorations(
     uint64_t prefab_id,
     const std::vector<DecorationSpec>& specs);
 
-std::string decoration_summary_to_json(const DecorationSummary& summary);
-
 }  // namespace opengil

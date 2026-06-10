@@ -35,7 +35,7 @@ else()
 endif()
 
 add_executable(opengil
-  src/cli/app.cpp
+  src/cli/json_formatters.cpp
   src/cli/main.cpp
 )
 target_link_libraries(opengil PRIVATE opengil_core)

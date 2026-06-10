@@ -174,8 +174,7 @@ int main() {
   OPENGIL_CHECK(primitive.transform.scale.z == 4.0);
   OPENGIL_CHECK(primitive.transform.rotation_z == 45.0);
 
-  const auto json = opengil::ui_primitive_patch_summary_to_json(transformed.summary);
-  OPENGIL_CHECK(json.find("\"kind\":\"uiSetTransform\"") != std::string::npos);
+  OPENGIL_CHECK(transformed.summary.kind == "uiSetTransform");
 
   return 0;
 }

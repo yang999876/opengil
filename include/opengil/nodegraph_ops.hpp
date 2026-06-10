@@ -43,7 +43,4 @@ struct AttachAllNodegraphsMutation {
 NodegraphMutation attach_nodegraph_to_prefab(const GilFile& file, uint64_t prefab_id, uint64_t nodegraph_id);
 AttachAllNodegraphsMutation attach_all_nodegraphs_to_prefab(const GilFile& file, uint64_t prefab_id);
 
-std::string attach_nodegraph_summary_to_json(const AttachNodegraphSummary& summary);
-std::string attach_all_nodegraphs_summary_to_json(const AttachAllNodegraphsSummary& summary);
-
 }  // namespace opengil

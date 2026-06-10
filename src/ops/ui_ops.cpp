@@ -4,12 +4,10 @@
 #include <cstdint>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "opengil/json.hpp"
 #include "opengil/wire.hpp"
 
 namespace opengil {
@@ -222,54 +220,6 @@ UiPrimitive read_snapshot(const PrimitiveEntry& entry, size_t primitive_index) {
   return primitive;
 }
 
-template <typename T>
-void append_optional_number(std::ostringstream& out, const std::optional<T>& value) {
-  if (value) {
-    out << *value;
-  } else {
-    out << "null";
-  }
-}
-
-void append_optional_string(std::ostringstream& out, const std::optional<std::string>& value) {
-  if (value) {
-    out << json::quote(*value);
-  } else {
-    out << "null";
-  }
-}
-
-void append_vec2_json(std::ostringstream& out, const UiVec2& value, const char* x_name, const char* y_name) {
-  out << "{"
-      << json::quote(x_name) << ":";
-  append_optional_number(out, value.x);
-  out << "," << json::quote(y_name) << ":";
-  append_optional_number(out, value.y);
-  out << "}";
-}
-
-void append_vec3_json(std::ostringstream& out, const UiVec3& value) {
-  out << "{\"x\":";
-  append_optional_number(out, value.x);
-  out << ",\"y\":";
-  append_optional_number(out, value.y);
-  out << ",\"z\":";
-  append_optional_number(out, value.z);
-  out << "}";
-}
-
-void append_transform_json(std::ostringstream& out, const UiPrimitiveTransform& transform) {
-  out << "{\"position\":";
-  append_vec2_json(out, transform.position, "x", "y");
-  out << ",\"size\":";
-  append_vec2_json(out, transform.size, "w", "h");
-  out << ",\"scale\":";
-  append_vec3_json(out, transform.scale);
-  out << ",\"rotationZ\":";
-  append_optional_number(out, transform.rotation_z);
-  out << "}";
-}
-
 }  // namespace
 
 UiPrimitiveList list_ui_primitives(const GilFile& file, uint64_t controller_entry_id) {
@@ -291,43 +241,6 @@ UiPrimitiveList list_ui_primitives(const GilFile& file, uint64_t controller_entr
   }
 
   return list;
-}
-
-std::string ui_primitive_list_to_json(const UiPrimitiveList& list) {
-  std::ostringstream out;
-  out << "{\"kind\":\"uiPrimitiveList\","
-      << "\"controllerEntryId\":" << list.controller_entry_id << ","
-      << "\"hasTop9\":" << json::bool_value(list.has_top9) << ","
-      << "\"hasTop46\":" << json::bool_value(list.has_top46) << ","
-      << "\"primitiveCount\":" << list.primitives.size() << ","
-      << "\"primitives\":[";
-
-  for (size_t i = 0; i < list.primitives.size(); ++i) {
-    const auto& primitive = list.primitives[i];
-    if (i) out << ",";
-    out << "{\"primitiveIndex\":" << primitive.primitive_index
-        << ",\"top9Index\":" << primitive.top9_index
-        << ",\"entryId\":";
-    append_optional_number(out, primitive.entry_id);
-    out << ",\"controllerEntryId\":";
-    append_optional_number(out, primitive.controller_entry_id);
-    out << ",\"name\":";
-    append_optional_string(out, primitive.name);
-    out << ",\"primitiveTypeId\":";
-    append_optional_number(out, primitive.primitive_type_id);
-    out << ",\"color\":";
-    append_optional_number(out, primitive.color);
-    out << ",\"rawColor\":";
-    append_optional_number(out, primitive.raw_color);
-    out << ",\"layer\":";
-    append_optional_number(out, primitive.layer);
-    out << ",\"transform\":";
-    append_transform_json(out, primitive.transform);
-    out << "}";
-  }
-
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

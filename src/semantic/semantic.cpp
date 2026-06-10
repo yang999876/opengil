@@ -6,8 +6,6 @@
 #include <set>
 #include <sstream>
 
-#include "opengil/json.hpp"
-
 namespace opengil {
 namespace {
 
@@ -48,22 +46,6 @@ std::vector<Field> safe_parse(std::span<const uint8_t> message) {
   std::vector<Field> fields;
   parse_fields(message, fields);
   return fields;
-}
-
-std::string optional_number_json(const std::optional<uint64_t>& value) {
-  return value ? json::number(*value) : "null";
-}
-
-std::string json_string_field(std::string_view key, std::string_view value) {
-  return json::quote(key) + ":" + json::quote(value);
-}
-
-std::string json_number_field(std::string_view key, uint64_t value) {
-  return json::quote(key) + ":" + json::number(value);
-}
-
-std::string json_optional_number_field(std::string_view key, const std::optional<uint64_t>& value) {
-  return json::quote(key) + ":" + optional_number_json(value);
 }
 
 std::set<uint64_t> collect_prefab_ids_from_tab(const GilFile& file, const std::string& tab_name) {
@@ -290,94 +272,6 @@ std::vector<NodeGraphInfo> list_nodegraphs(const GilFile& file) {
     return a.path < b.path;
   });
   return graphs;
-}
-
-std::string tabs_to_json(const std::vector<TabInfo>& tabs) {
-  std::ostringstream out;
-  out << "{\"count\":" << tabs.size() << ",\"items\":[";
-  for (size_t i = 0; i < tabs.size(); ++i) {
-    if (i) out << ",";
-    out << "{"
-        << json_optional_number_field("id", tabs[i].id) << ","
-        << json_string_field("name", tabs[i].name) << ",\"prefabIds\":[";
-    for (size_t j = 0; j < tabs[i].prefab_ids.size(); ++j) {
-      if (j) out << ",";
-      out << tabs[i].prefab_ids[j];
-    }
-    out << "]}";
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string prefabs_to_json(const std::vector<PrefabInfo>& prefabs) {
-  std::ostringstream out;
-  out << "{\"count\":" << prefabs.size() << ",\"items\":[";
-  for (size_t i = 0; i < prefabs.size(); ++i) {
-    if (i) out << ",";
-    out << "{"
-        << json_number_field("prefabId", prefabs[i].prefab_id) << ","
-        << json_string_field("name", prefabs[i].name) << ","
-        << json_optional_number_field("modelAssetId", prefabs[i].model_asset_id)
-        << "}";
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string prefab_tabs_to_json(const std::vector<TabInfo>& tabs) {
-  std::ostringstream out;
-  out << "{\"count\":" << tabs.size() << ",\"items\":[";
-  for (size_t i = 0; i < tabs.size(); ++i) {
-    if (i) out << ",";
-    out << "{"
-        << json_optional_number_field("id", tabs[i].id) << ","
-        << json_string_field("name", tabs[i].name)
-        << "}";
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string model_info_to_json(const ModelInfo& info) {
-  std::ostringstream out;
-  out << "{"
-      << json_number_field("prefabId", info.prefab_id) << ","
-      << json_string_field("name", info.name) << ","
-      << json_optional_number_field("prefabModelAssetId", info.prefab_model_asset_id)
-      << ",\"sceneModelAssetIds\":[";
-  for (size_t i = 0; i < info.scene_model_asset_ids.size(); ++i) {
-    if (i) out << ",";
-    out << info.scene_model_asset_ids[i];
-  }
-  out << "],\"previewModelAssetIds\":[";
-  for (size_t i = 0; i < info.preview_model_asset_ids.size(); ++i) {
-    if (i) out << ",";
-    out << info.preview_model_asset_ids[i];
-  }
-  out << "]}";
-  return out.str();
-}
-
-std::string nodegraphs_to_json(const std::vector<NodeGraphInfo>& graphs) {
-  std::ostringstream out;
-  out << "{\"count\":" << graphs.size() << ",\"items\":[";
-  for (size_t i = 0; i < graphs.size(); ++i) {
-    if (i) out << ",";
-    out << "{"
-        << json_string_field("path", graphs[i].path) << ","
-        << json_string_field("role", graphs[i].role) << ","
-        << json_optional_number_field("id", graphs[i].id) << ","
-        << json_string_field("name", graphs[i].name) << ","
-        << "\"nodeCount\":" << graphs[i].node_count << ","
-        << "\"compositePinCount\":" << graphs[i].composite_pin_count << ","
-        << "\"commentCount\":" << graphs[i].comment_count << ","
-        << "\"graphValueCount\":" << graphs[i].graph_value_count << ","
-        << "\"affiliationCount\":" << graphs[i].affiliation_count
-        << "}";
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

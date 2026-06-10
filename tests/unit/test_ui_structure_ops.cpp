@@ -217,7 +217,6 @@ int main() {
   OPENGIL_CHECK(append.summary.primitive_count == 3);
   OPENGIL_CHECK((append.summary.entry_ids == std::vector<uint64_t>{7001, 7002, 9001}));
   OPENGIL_CHECK((append.summary.changed_top_fields == std::vector<uint32_t>{9}));
-  OPENGIL_CHECK(opengil::ui_structure_summary_to_json(append.summary).find("\"changedTopFields\":[9]") != std::string::npos);
   check_only_top9_changed(target, append_file);
 
   opengil::UiAppendManyOptions many_options;

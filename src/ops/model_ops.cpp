@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -185,24 +183,6 @@ GilMutation set_prefab_model_asset_id(const GilFile& file, uint64_t prefab_id, u
 
 GilMutation set_prefab_to_empty_model(const GilFile& file, uint64_t prefab_id) {
   return set_prefab_model_asset_id(file, prefab_id, EMPTY_MODEL_ASSET_ID);
-}
-
-std::string set_model_summary_to_json(const SetModelSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"prefabName\":" << json::quote(summary.prefab_name) << ","
-      << "\"modelAssetId\":" << summary.model_asset_id << ","
-      << "\"prefabUpdated\":" << json::bool_value(summary.prefab_updated) << ","
-      << "\"sceneUpdated\":" << summary.scene_updated << ","
-      << "\"previewUpdated\":" << summary.preview_updated << ","
-      << "\"changedTopFields\":[";
-  for (size_t i = 0; i < summary.changed_top_fields.size(); ++i) {
-    if (i) out << ",";
-    out << summary.changed_top_fields[i];
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

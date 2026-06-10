@@ -5,10 +5,8 @@
 #include <map>
 #include <optional>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 
-#include "opengil/json.hpp"
 #include "opengil/semantic.hpp"
 
 namespace opengil {
@@ -268,42 +266,6 @@ AttachAllNodegraphsMutation attach_all_nodegraphs_to_prefab(const GilFile& file,
   mutation.payload = std::vector<uint8_t>(payload(current).begin(), payload(current).end());
   mutation.summary = std::move(summary);
   return mutation;
-}
-
-std::string attach_nodegraph_summary_to_json(const AttachNodegraphSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"nodegraphId\":" << summary.nodegraph_id << ","
-      << "\"nodegraphName\":" << json::quote(summary.nodegraph_name) << ","
-      << "\"prefabUpdated\":" << json::bool_value(summary.prefab_updated) << ","
-      << "\"alreadyAttached\":" << json::bool_value(summary.already_attached) << ","
-      << "\"sceneUpdated\":" << summary.scene_updated << ","
-      << "\"previewUpdated\":" << summary.preview_updated << ","
-      << "\"changedTopFields\":" << json::array_of_numbers(summary.changed_top_fields)
-      << "}";
-  return out.str();
-}
-
-std::string attach_all_nodegraphs_summary_to_json(const AttachAllNodegraphsSummary& summary) {
-  std::ostringstream out;
-  out << "{"
-      << "\"prefabId\":" << summary.prefab_id << ","
-      << "\"availableCount\":" << summary.available_count << ","
-      << "\"attachedCount\":" << summary.attached_count << ","
-      << "\"attachedNodegraphIds\":[";
-  for (size_t i = 0; i < summary.attached_nodegraph_ids.size(); ++i) {
-    if (i) out << ",";
-    out << summary.attached_nodegraph_ids[i];
-  }
-  out << "],\"changedTopFields\":" << json::array_of_numbers(summary.changed_top_fields)
-      << ",\"items\":[";
-  for (size_t i = 0; i < summary.items.size(); ++i) {
-    if (i) out << ",";
-    out << attach_nodegraph_summary_to_json(summary.items[i]);
-  }
-  out << "]}";
-  return out.str();
 }
 
 }  // namespace opengil

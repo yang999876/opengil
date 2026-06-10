@@ -61,7 +61,6 @@ struct PrefabDeleteMutation {
 };
 
 PrefabRenameMutation rename_prefab(const GilFile& file, uint64_t prefab_id, const std::string& new_name);
-std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary);
 
 PrefabCloneMutation clone_prefab_into_tab(
     const GilFile& file,
@@ -92,9 +91,5 @@ PrefabCloneMutation copy_prefab_to_tab_by_id(
     const ClonePrefabOptions& options = {});
 
 PrefabDeleteMutation delete_prefab(const GilFile& file, uint64_t prefab_id);
-std::string delete_prefab_summary_to_json(const DeletePrefabSummary& summary);
-
-std::string clone_prefab_summary_to_json(const ClonePrefabSummary& summary);
-std::string copy_prefab_summary_to_json(const ClonePrefabSummary& summary);
 
 }  // namespace opengil

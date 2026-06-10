@@ -38,6 +38,4 @@ AttachmentMutation add_attachment_points(
     std::optional<uint64_t> object_id,
     const std::vector<AttachmentPointSpec>& specs);
 
-std::string attachment_summary_to_json(const AttachmentSummary& summary);
-
 }  // namespace opengil

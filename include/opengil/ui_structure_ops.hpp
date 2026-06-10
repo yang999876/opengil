@@ -71,6 +71,4 @@ UiStructureMutation copy_ui_primitive_transform_from_template(
     const GilFile& template_file,
     const UiCopyTransformFromTemplateOptions& options = {});
 
-std::string ui_structure_summary_to_json(const UiStructureSummary& summary);
-
 }  // namespace opengil
