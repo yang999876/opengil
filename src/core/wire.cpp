@@ -1,6 +1,7 @@
 #include "opengil/wire.hpp"
 
 #include <cstring>
+#include <stdexcept>
 #include <sstream>
 
 namespace opengil {
@@ -159,6 +160,18 @@ OwnedField clone_owned_field(std::span<const uint8_t> message, const Field& fiel
 std::vector<OwnedField> parse_owned_fields(std::span<const uint8_t> bytes, std::string* error) {
   std::vector<Field> fields;
   if (!parse_fields(bytes, fields, error)) return {};
+  std::vector<OwnedField> out;
+  out.reserve(fields.size());
+  for (const auto& field : fields) out.push_back(clone_owned_field(bytes, field));
+  return out;
+}
+
+std::vector<OwnedField> parse_owned_fields_or_throw(std::span<const uint8_t> bytes, const std::string& context) {
+  std::string error;
+  std::vector<Field> fields;
+  if (!parse_fields(bytes, fields, &error)) {
+    throw std::runtime_error(context + " parse failed: " + error);
+  }
   std::vector<OwnedField> out;
   out.reserve(fields.size());
   for (const auto& field : fields) out.push_back(clone_owned_field(bytes, field));

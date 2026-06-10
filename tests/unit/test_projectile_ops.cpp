@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -104,14 +104,14 @@ opengil::GilFile load_mutation_as_file(const opengil::ProjectileMutation& mutati
 
 std::vector<uint8_t> first_component(const opengil::GilFile& file) {
   const auto top4 = opengil::top_level_data(file, 4);
-  assert(top4);
+  OPENGIL_CHECK(top4);
   const auto top_fields = opengil::parse_owned_fields(*top4);
-  assert(!top_fields.empty());
+  OPENGIL_CHECK(!top_fields.empty());
   const auto entry_fields = opengil::parse_owned_fields(top_fields[0].data);
   for (const auto& field : entry_fields) {
     if (field.number == 8 && field.wire == 2) return field.data;
   }
-  assert(false);
+  OPENGIL_CHECK(false);
   return {};
 }
 
@@ -127,27 +127,27 @@ int main() {
   input.gravity = 20.0f;
 
   const auto mutation = opengil::set_prefab_projectile_motion(file, prefab_id, input);
-  assert(mutation.summary.prefab_id == prefab_id);
-  assert(mutation.summary.before_x == 1.0f);
-  assert(!mutation.summary.before_y);
-  assert(mutation.summary.before_gravity == 9.8f);
-  assert(mutation.summary.after_x == 3.0f);
-  assert(mutation.summary.after_y == 4.0f);
-  assert(mutation.summary.after_gravity == 20.0f);
-  assert(mutation.summary.changed_top_fields.size() == 1);
-  assert(mutation.summary.changed_top_fields[0] == 4);
+  OPENGIL_CHECK(mutation.summary.prefab_id == prefab_id);
+  OPENGIL_CHECK(mutation.summary.before_x == 1.0f);
+  OPENGIL_CHECK(!mutation.summary.before_y);
+  OPENGIL_CHECK(mutation.summary.before_gravity == 9.8f);
+  OPENGIL_CHECK(mutation.summary.after_x == 3.0f);
+  OPENGIL_CHECK(mutation.summary.after_y == 4.0f);
+  OPENGIL_CHECK(mutation.summary.after_gravity == 20.0f);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields[0] == 4);
 
   const auto changed_file = load_mutation_as_file(mutation, "opengil-test-projectile.gil");
   const auto validation = opengil::validate_gil(changed_file);
-  assert(validation.ok);
+  OPENGIL_CHECK(validation.ok);
 
   const auto component = first_component(changed_file);
   const std::array<uint32_t, 5> x_path{21, 1, 12, 1, 1};
   const std::array<uint32_t, 5> y_path{21, 1, 12, 1, 2};
   const std::array<uint32_t, 4> gravity_path{21, 1, 12, 2};
-  assert(opengil::read_fixed32_at_path(component, x_path) == 3.0f);
-  assert(opengil::read_fixed32_at_path(component, y_path) == 4.0f);
-  assert(opengil::read_fixed32_at_path(component, gravity_path) == 20.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(component, x_path) == 3.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(component, y_path) == 4.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(component, gravity_path) == 20.0f);
 
   return 0;
 }

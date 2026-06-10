@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <string>
 
 #include "opengil/json_value.hpp"
@@ -12,27 +12,27 @@ int main() {
     "dryRun": true
   })");
 
-  assert(value.is_object());
+  OPENGIL_CHECK(value.is_object());
   const auto* ops = value.find("ops");
-  assert(ops);
-  assert(ops->is_array());
-  assert(ops->array_value.size() == 2);
+  OPENGIL_CHECK(ops);
+  OPENGIL_CHECK(ops->is_array());
+  OPENGIL_CHECK(ops->array_value.size() == 2);
   const auto* first = ops->array_value[0].find("prefabId");
-  assert(first);
-  assert(first->is_unsigned());
-  assert(first->unsigned_value == 1086324737);
+  OPENGIL_CHECK(first);
+  OPENGIL_CHECK(first->is_unsigned());
+  OPENGIL_CHECK(first->unsigned_value == 1086324737);
   const auto* second_name = ops->array_value[1].find("name");
-  assert(second_name);
-  assert(second_name->is_string());
-  assert(second_name->string_value == "openGil");
+  OPENGIL_CHECK(second_name);
+  OPENGIL_CHECK(second_name->is_string());
+  OPENGIL_CHECK(second_name->string_value == "openGil");
   const auto* number = ops->array_value[1].find("x");
-  assert(number);
-  assert(number->is_number());
-  assert(number->number_value == -3.5);
+  OPENGIL_CHECK(number);
+  OPENGIL_CHECK(number->is_number());
+  OPENGIL_CHECK(number->number_value == -3.5);
   const auto* dry_run = value.find("dryRun");
-  assert(dry_run);
-  assert(dry_run->is_bool());
-  assert(dry_run->bool_value);
+  OPENGIL_CHECK(dry_run);
+  OPENGIL_CHECK(dry_run->is_bool());
+  OPENGIL_CHECK(dry_run->bool_value);
 
   return 0;
 }

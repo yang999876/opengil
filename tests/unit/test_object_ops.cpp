@@ -1,11 +1,14 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -137,16 +140,16 @@ opengil::GilFile load_mutation_as_file(const Mutation& mutation, const char* nam
 
 std::vector<uint8_t> first_entry(const opengil::GilFile& file, uint32_t top_field) {
   const auto top = opengil::top_level_data(file, top_field);
-  assert(top);
+  OPENGIL_CHECK(top);
   const auto fields = opengil::parse_owned_fields(*top);
-  assert(fields.size() == 1);
+  OPENGIL_CHECK(fields.size() == 1);
   return fields[0].data;
 }
 
 std::vector<std::vector<uint8_t>> entries(const opengil::GilFile& file, uint32_t top_field) {
   std::vector<std::vector<uint8_t>> result;
   const auto top = opengil::top_level_data(file, top_field);
-  assert(top);
+  OPENGIL_CHECK(top);
   for (const auto& field : opengil::len_fields(*top, 1)) {
     const auto data = opengil::field_data(*top, field);
     result.emplace_back(data.begin(), data.end());
@@ -162,7 +165,7 @@ struct Mapping {
 std::vector<Mapping> category_mappings(const opengil::GilFile& file, uint64_t category_id) {
   std::vector<Mapping> result;
   const auto top6 = opengil::top_level_data(file, 6);
-  assert(top6);
+  OPENGIL_CHECK(top6);
   const std::array<uint32_t, 1> category_path{1};
   const std::array<uint32_t, 1> mapping_type_path{1};
   const std::array<uint32_t, 1> mapping_target_path{2};
@@ -190,6 +193,17 @@ bool has_mapping(const opengil::GilFile& file, uint64_t category_id, uint64_t ma
   return false;
 }
 
+template <typename Fn>
+void expect_throws_containing(Fn&& fn, std::string_view expected) {
+  try {
+    fn();
+  } catch (const std::exception& error) {
+    OPENGIL_CHECK(std::string(error.what()).find(expected) != std::string::npos);
+    return;
+  }
+  OPENGIL_CHECK(false);
+}
+
 }  // namespace
 
 int main() {
@@ -199,87 +213,108 @@ int main() {
   transform.rotation = {20.0, 21.0, 22.0};
   transform.scale = {2.0, 3.0, 4.0};
 
+  opengil::CreateSceneObjectOptions duplicate_scene_options;
+  duplicate_scene_options.object_id = 501;
+  duplicate_scene_options.transform = transform;
+  expect_throws_containing(
+      [&] { opengil::create_scene_object(file, 20001220, duplicate_scene_options); },
+      "object id already exists");
+
+  opengil::CreatePrefabOptions duplicate_prefab_options;
+  duplicate_prefab_options.prefab_id = 401;
+  duplicate_prefab_options.transform = transform;
+  expect_throws_containing(
+      [&] { opengil::create_prefab(file, 20001220, duplicate_prefab_options); },
+      "prefab id already exists");
+
+  opengil::CreateScenePrefabInstanceOptions duplicate_instance_options;
+  duplicate_instance_options.object_id = 801;
+  duplicate_instance_options.transform = transform;
+  expect_throws_containing(
+      [&] { opengil::create_scene_prefab_instance(file, 401, 20001220, duplicate_instance_options); },
+      "object id already exists");
+
   const auto scene = opengil::set_scene_transform(file, 501, transform);
-  assert(scene.changed_top_fields.size() == 1);
-  assert(scene.changed_top_fields[0] == 5);
+  OPENGIL_CHECK(scene.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(scene.changed_top_fields[0] == 5);
   const auto scene_file = load_mutation_as_file(scene, "opengil-test-scene-transform.gil");
-  assert(opengil::validate_gil(scene_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(scene_file).ok);
   const auto scene_entry = first_entry(scene_file, 5);
   const std::array<uint32_t, 4> scene_pos_x{6, 11, 1, 1};
   const std::array<uint32_t, 4> scene_rot_z{6, 11, 2, 3};
   const std::array<uint32_t, 4> scene_scale_y{6, 11, 3, 2};
-  assert(opengil::read_fixed32_at_path(scene_entry, scene_pos_x) == 10.0f);
-  assert(opengil::read_fixed32_at_path(scene_entry, scene_rot_z) == 22.0f);
-  assert(opengil::read_fixed32_at_path(scene_entry, scene_scale_y) == 3.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(scene_entry, scene_pos_x) == 10.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(scene_entry, scene_rot_z) == 22.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(scene_entry, scene_scale_y) == 3.0f);
 
   const auto preview = opengil::set_preview_transform(file, 801, transform);
-  assert(preview.changed_top_fields.size() == 1);
-  assert(preview.changed_top_fields[0] == 8);
+  OPENGIL_CHECK(preview.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(preview.changed_top_fields[0] == 8);
   const auto preview_file = load_mutation_as_file(preview, "opengil-test-preview-transform.gil");
-  assert(opengil::validate_gil(preview_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(preview_file).ok);
   const auto preview_entry = first_entry(preview_file, 8);
-  assert(opengil::read_fixed32_at_path(preview_entry, scene_pos_x) == 10.0f);
-  assert(opengil::read_fixed32_at_path(preview_entry, scene_rot_z) == 22.0f);
-  assert(opengil::read_fixed32_at_path(preview_entry, scene_scale_y) == 3.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(preview_entry, scene_pos_x) == 10.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(preview_entry, scene_rot_z) == 22.0f);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(preview_entry, scene_scale_y) == 3.0f);
 
   opengil::CreateSceneObjectOptions scene_create_options;
   scene_create_options.object_id = 9001;
   scene_create_options.transform = transform;
   const auto created_scene = opengil::create_scene_object(file, 20001220, scene_create_options);
-  assert(created_scene.changed_top_fields.size() == 2);
-  assert(created_scene.changed_top_fields[0] == 5);
-  assert(created_scene.changed_top_fields[1] == 6);
+  OPENGIL_CHECK(created_scene.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(created_scene.changed_top_fields[0] == 5);
+  OPENGIL_CHECK(created_scene.changed_top_fields[1] == 6);
   const auto created_scene_file = load_mutation_as_file(created_scene, "opengil-test-create-scene-object.gil");
-  assert(opengil::validate_gil(created_scene_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(created_scene_file).ok);
   const auto scene_entries = entries(created_scene_file, 5);
-  assert(scene_entries.size() == 2);
+  OPENGIL_CHECK(scene_entries.size() == 2);
   const auto new_scene_entry = std::span<const uint8_t>(scene_entries[1].data(), scene_entries[1].size());
   const std::array<uint32_t, 1> id_path{1};
   const std::array<uint32_t, 2> ref_path{2, 1};
   const std::array<uint32_t, 1> asset_path{8};
-  assert(opengil::read_varint_at_path(new_scene_entry, id_path) == 9001);
-  assert(opengil::read_varint_at_path(new_scene_entry, ref_path) == 20001220);
-  assert(opengil::read_varint_at_path(new_scene_entry, asset_path) == 20001220);
-  assert(opengil::read_fixed32_at_path(new_scene_entry, scene_pos_x) == 10.0f);
-  assert(has_mapping(created_scene_file, 3, 200, 9001));
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, id_path) == 9001);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, ref_path) == 20001220);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, asset_path) == 20001220);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(new_scene_entry, scene_pos_x) == 10.0f);
+  OPENGIL_CHECK(has_mapping(created_scene_file, 3, 200, 9001));
 
   opengil::CreatePrefabOptions prefab_create_options;
   prefab_create_options.prefab_id = 9002;
   prefab_create_options.transform = transform;
   const auto created_prefab = opengil::create_prefab(file, 20001220, prefab_create_options);
-  assert(created_prefab.changed_top_fields.size() == 2);
-  assert(created_prefab.changed_top_fields[0] == 4);
-  assert(created_prefab.changed_top_fields[1] == 6);
+  OPENGIL_CHECK(created_prefab.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(created_prefab.changed_top_fields[0] == 4);
+  OPENGIL_CHECK(created_prefab.changed_top_fields[1] == 6);
   const auto created_prefab_file = load_mutation_as_file(created_prefab, "opengil-test-create-prefab.gil");
-  assert(opengil::validate_gil(created_prefab_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(created_prefab_file).ok);
   const auto prefab_entries = entries(created_prefab_file, 4);
-  assert(prefab_entries.size() == 2);
+  OPENGIL_CHECK(prefab_entries.size() == 2);
   const auto new_prefab_entry = std::span<const uint8_t>(prefab_entries[1].data(), prefab_entries[1].size());
   const std::array<uint32_t, 1> prefab_asset_path{2};
   const std::array<uint32_t, 4> prefab_pos_x{7, 11, 1, 1};
-  assert(opengil::read_varint_at_path(new_prefab_entry, id_path) == 9002);
-  assert(opengil::read_varint_at_path(new_prefab_entry, prefab_asset_path) == 20001220);
-  assert(opengil::read_fixed32_at_path(new_prefab_entry, prefab_pos_x) == 10.0f);
-  assert(has_mapping(created_prefab_file, 6, 100, 9002));
-  assert(has_mapping(created_prefab_file, 3, 100, 9002));
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_prefab_entry, id_path) == 9002);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_prefab_entry, prefab_asset_path) == 20001220);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(new_prefab_entry, prefab_pos_x) == 10.0f);
+  OPENGIL_CHECK(has_mapping(created_prefab_file, 6, 100, 9002));
+  OPENGIL_CHECK(has_mapping(created_prefab_file, 3, 100, 9002));
 
   opengil::CreateScenePrefabInstanceOptions instance_options;
   instance_options.object_id = 9003;
   instance_options.transform = transform;
   const auto created_instance = opengil::create_scene_prefab_instance(file, 9002, 20001220, instance_options);
-  assert(created_instance.changed_top_fields.size() == 2);
-  assert(created_instance.changed_top_fields[0] == 5);
-  assert(created_instance.changed_top_fields[1] == 6);
+  OPENGIL_CHECK(created_instance.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(created_instance.changed_top_fields[0] == 5);
+  OPENGIL_CHECK(created_instance.changed_top_fields[1] == 6);
   const auto created_instance_file = load_mutation_as_file(created_instance, "opengil-test-create-scene-prefab-instance.gil");
-  assert(opengil::validate_gil(created_instance_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(created_instance_file).ok);
   const auto instance_entries = entries(created_instance_file, 5);
-  assert(instance_entries.size() == 2);
+  OPENGIL_CHECK(instance_entries.size() == 2);
   const auto new_instance_entry = std::span<const uint8_t>(instance_entries[1].data(), instance_entries[1].size());
-  assert(opengil::read_varint_at_path(new_instance_entry, id_path) == 9003);
-  assert(opengil::read_varint_at_path(new_instance_entry, ref_path) == 9002);
-  assert(opengil::read_varint_at_path(new_instance_entry, asset_path) == 20001220);
-  assert(opengil::read_fixed32_at_path(new_instance_entry, scene_pos_x) == 10.0f);
-  assert(has_mapping(created_instance_file, 3, 200, 9003));
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_instance_entry, id_path) == 9003);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_instance_entry, ref_path) == 9002);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_instance_entry, asset_path) == 20001220);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(new_instance_entry, scene_pos_x) == 10.0f);
+  OPENGIL_CHECK(has_mapping(created_instance_file, 3, 200, 9003));
 
   return 0;
 }

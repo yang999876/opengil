@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -94,7 +94,7 @@ opengil::GilFile load_mutation_as_file(const Mutation& mutation, const char* nam
 
 std::vector<uint8_t> entry_by_id(const opengil::GilFile& file, uint32_t top_field, uint64_t id) {
   const auto top = opengil::top_level_data(file, top_field);
-  assert(top);
+  OPENGIL_CHECK(top);
   const std::array<uint32_t, 1> id_path{1};
   for (const auto& field : opengil::len_fields(*top, 1)) {
     const auto entry = opengil::field_data(*top, field);
@@ -102,7 +102,7 @@ std::vector<uint8_t> entry_by_id(const opengil::GilFile& file, uint32_t top_fiel
       return std::vector<uint8_t>(entry.begin(), entry.end());
     }
   }
-  assert(false);
+  OPENGIL_CHECK(false);
   return {};
 }
 
@@ -119,15 +119,15 @@ int main() {
   spec.rot_y = 82.0;
 
   const auto mutation = opengil::add_attachment_points(file, 101, std::nullopt, {spec});
-  assert(mutation.summary.prefab_id == 101);
-  assert(!mutation.summary.object_id);
-  assert(mutation.summary.scene_instance_count == 1);
-  assert(mutation.summary.names.size() == 1);
-  assert(mutation.summary.names[0] == "left_hand");
-  assert(mutation.summary.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(mutation.summary.prefab_id == 101);
+  OPENGIL_CHECK(!mutation.summary.object_id);
+  OPENGIL_CHECK(mutation.summary.scene_instance_count == 1);
+  OPENGIL_CHECK(mutation.summary.names.size() == 1);
+  OPENGIL_CHECK(mutation.summary.names[0] == "left_hand");
+  OPENGIL_CHECK(mutation.summary.changed_top_fields.size() == 2);
 
   const auto changed = load_mutation_as_file(mutation, "opengil-test-attachment-add.gil");
-  assert(opengil::validate_gil(changed).ok);
+  OPENGIL_CHECK(opengil::validate_gil(changed).ok);
 
   const auto prefab_entry = entry_by_id(changed, 4, 101);
   const auto scene_entry = entry_by_id(changed, 8, 201);
@@ -135,10 +135,10 @@ int main() {
   const std::array<uint32_t, 4> prefab32_name{8, 32, 501, 1};
   const std::array<uint32_t, 4> scene21_name{6, 21, 1, 1};
   const std::array<uint32_t, 4> scene32_name{7, 32, 501, 1};
-  assert(opengil::read_string_at_path(prefab_entry, prefab21_name) == "left_hand");
-  assert(opengil::read_string_at_path(prefab_entry, prefab32_name) == "left_hand");
-  assert(opengil::read_string_at_path(scene_entry, scene21_name) == "left_hand");
-  assert(opengil::read_string_at_path(scene_entry, scene32_name) == "left_hand");
+  OPENGIL_CHECK(opengil::read_string_at_path(prefab_entry, prefab21_name) == "left_hand");
+  OPENGIL_CHECK(opengil::read_string_at_path(prefab_entry, prefab32_name) == "left_hand");
+  OPENGIL_CHECK(opengil::read_string_at_path(scene_entry, scene21_name) == "left_hand");
+  OPENGIL_CHECK(opengil::read_string_at_path(scene_entry, scene32_name) == "left_hand");
 
   return 0;
 }

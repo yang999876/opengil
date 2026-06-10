@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -176,7 +176,7 @@ opengil::GilFile make_clone_synthetic_file() {
 
 bool has_decoration_owner(const opengil::GilFile& file, uint64_t decoration_id, uint64_t owner_prefab_id) {
   const auto top27 = opengil::top_level_data(file, 27);
-  assert(top27);
+  OPENGIL_CHECK(top27);
   const std::array<uint32_t, 1> id_path{1};
   const std::array<uint32_t, 3> owner_path{4, 50, 502};
   for (const auto& field : opengil::len_fields(*top27, 1)) {
@@ -191,7 +191,7 @@ bool has_decoration_owner(const opengil::GilFile& file, uint64_t decoration_id, 
 
 size_t len_field_count(const opengil::GilFile& file, uint32_t top_field_number, uint32_t repeated_field_number) {
   const auto top = opengil::top_level_data(file, top_field_number);
-  assert(top);
+  OPENGIL_CHECK(top);
   return opengil::len_fields(*top, repeated_field_number).size();
 }
 
@@ -202,94 +202,94 @@ int main() {
 
   const std::string renamed = "openGil Rename Test";
   const auto mutation = opengil::rename_prefab(file, 1086324737, renamed);
-  assert(mutation.summary.prefab_id == 1086324737);
-  assert(mutation.summary.before_name == "Default Template");
-  assert(mutation.summary.after_name == renamed);
-  assert(mutation.summary.changed_top_fields.size() == 1);
-  assert(mutation.summary.changed_top_fields[0] == 4);
+  OPENGIL_CHECK(mutation.summary.prefab_id == 1086324737);
+  OPENGIL_CHECK(mutation.summary.before_name == "Default Template");
+  OPENGIL_CHECK(mutation.summary.after_name == renamed);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields[0] == 4);
 
   const auto changed_file = load_mutation_as_file(mutation, "opengil-test-rename.gil");
   const auto prefabs = opengil::list_prefabs(changed_file);
   bool found = false;
   for (const auto& prefab : prefabs) {
     if (prefab.prefab_id == 1086324737) {
-      assert(prefab.name == renamed);
+      OPENGIL_CHECK(prefab.name == renamed);
       found = true;
     }
   }
-  assert(found);
+  OPENGIL_CHECK(found);
 
   const auto validation = opengil::validate_gil(changed_file);
-  assert(validation.ok);
+  OPENGIL_CHECK(validation.ok);
 
   const auto clone_file = make_clone_synthetic_file();
   const auto cloned = opengil::clone_prefab_into_tab_by_id(clone_file, 101, 6, "Clone Prefab");
-  assert(cloned.summary.source_prefab_id == 101);
-  assert(cloned.summary.source_name == "Source Prefab");
-  assert(cloned.summary.new_prefab_id == 102);
-  assert(cloned.summary.new_prefab_name == "Clone Prefab");
-  assert(cloned.summary.target_tab_id == 6);
-  assert(cloned.summary.target_tab_name == "Balls");
-  assert(cloned.summary.cloned_decoration_count == 1);
-  assert(cloned.summary.changed_top_fields.size() == 3);
-  assert(cloned.summary.changed_top_fields[0] == 4);
-  assert(cloned.summary.changed_top_fields[1] == 6);
-  assert(cloned.summary.changed_top_fields[2] == 27);
+  OPENGIL_CHECK(cloned.summary.source_prefab_id == 101);
+  OPENGIL_CHECK(cloned.summary.source_name == "Source Prefab");
+  OPENGIL_CHECK(cloned.summary.new_prefab_id == 102);
+  OPENGIL_CHECK(cloned.summary.new_prefab_name == "Clone Prefab");
+  OPENGIL_CHECK(cloned.summary.target_tab_id == 6);
+  OPENGIL_CHECK(cloned.summary.target_tab_name == "Balls");
+  OPENGIL_CHECK(cloned.summary.cloned_decoration_count == 1);
+  OPENGIL_CHECK(cloned.summary.changed_top_fields.size() == 3);
+  OPENGIL_CHECK(cloned.summary.changed_top_fields[0] == 4);
+  OPENGIL_CHECK(cloned.summary.changed_top_fields[1] == 6);
+  OPENGIL_CHECK(cloned.summary.changed_top_fields[2] == 27);
 
   const auto cloned_file = load_mutation_as_file(cloned, "opengil-test-clone-prefab.gil");
-  assert(opengil::validate_gil(cloned_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(cloned_file).ok);
   const auto cloned_prefabs = opengil::list_prefabs(cloned_file);
   bool found_clone = false;
   for (const auto& prefab : cloned_prefabs) {
     if (prefab.prefab_id == 102) {
-      assert(prefab.name == "Clone Prefab");
+      OPENGIL_CHECK(prefab.name == "Clone Prefab");
       found_clone = true;
     }
   }
-  assert(found_clone);
+  OPENGIL_CHECK(found_clone);
 
   const auto clone_tabs = opengil::list_prefab_tabs(cloned_file, 102);
-  assert(clone_tabs.size() == 1);
-  assert(clone_tabs[0].id == 6);
-  assert(clone_tabs[0].name == "Balls");
-  assert(has_decoration_owner(cloned_file, 1002, 102));
+  OPENGIL_CHECK(clone_tabs.size() == 1);
+  OPENGIL_CHECK(clone_tabs[0].id == 6);
+  OPENGIL_CHECK(clone_tabs[0].name == "Balls");
+  OPENGIL_CHECK(has_decoration_owner(cloned_file, 1002, 102));
 
   const auto copied = opengil::copy_prefab_to_tab_by_id(clone_file, 101, 6);
-  assert(copied.summary.source_prefab_id == 101);
-  assert(copied.summary.source_name == "Source Prefab");
-  assert(copied.summary.new_prefab_id == 102);
-  assert(copied.summary.new_prefab_name == "Source Prefab-copy");
-  assert(copied.summary.target_tab_id == 6);
-  assert(copied.summary.cloned_decoration_count == 1);
+  OPENGIL_CHECK(copied.summary.source_prefab_id == 101);
+  OPENGIL_CHECK(copied.summary.source_name == "Source Prefab");
+  OPENGIL_CHECK(copied.summary.new_prefab_id == 102);
+  OPENGIL_CHECK(copied.summary.new_prefab_name == "Source Prefab-copy");
+  OPENGIL_CHECK(copied.summary.target_tab_id == 6);
+  OPENGIL_CHECK(copied.summary.cloned_decoration_count == 1);
 
   const auto copied_file = load_mutation_as_file(copied, "opengil-test-copy-prefab-to-tab.gil");
-  assert(opengil::validate_gil(copied_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(copied_file).ok);
   const auto copied_prefabs = opengil::list_prefabs(copied_file);
   bool found_copy = false;
   for (const auto& prefab : copied_prefabs) {
     if (prefab.prefab_id == 102) {
-      assert(prefab.name == "Source Prefab-copy");
+      OPENGIL_CHECK(prefab.name == "Source Prefab-copy");
       found_copy = true;
     }
   }
-  assert(found_copy);
-  assert(has_decoration_owner(copied_file, 1002, 102));
+  OPENGIL_CHECK(found_copy);
+  OPENGIL_CHECK(has_decoration_owner(copied_file, 1002, 102));
 
   const auto deleted = opengil::delete_prefab(clone_file, 101);
-  assert(deleted.summary.prefab_id == 101);
-  assert(deleted.summary.removed_decoration_ids.size() == 1);
-  assert(deleted.summary.removed_decoration_ids[0] == 1001);
-  assert(deleted.summary.changed_top_fields.size() == 4);
+  OPENGIL_CHECK(deleted.summary.prefab_id == 101);
+  OPENGIL_CHECK(deleted.summary.removed_decoration_ids.size() == 1);
+  OPENGIL_CHECK(deleted.summary.removed_decoration_ids[0] == 1001);
+  OPENGIL_CHECK(deleted.summary.changed_top_fields.size() == 4);
 
   const auto deleted_file = load_mutation_as_file(deleted, "opengil-test-delete-prefab.gil");
-  assert(opengil::validate_gil(deleted_file).ok);
+  OPENGIL_CHECK(opengil::validate_gil(deleted_file).ok);
   const auto remaining_prefabs = opengil::list_prefabs(deleted_file);
   for (const auto& prefab : remaining_prefabs) {
-    assert(prefab.prefab_id != 101);
+    OPENGIL_CHECK(prefab.prefab_id != 101);
   }
-  assert(opengil::list_prefab_tabs(deleted_file, 101).empty());
-  assert(!has_decoration_owner(deleted_file, 1001, 101));
-  assert(len_field_count(deleted_file, 10, 1) == 1);
+  OPENGIL_CHECK(opengil::list_prefab_tabs(deleted_file, 101).empty());
+  OPENGIL_CHECK(!has_decoration_owner(deleted_file, 1001, 101));
+  OPENGIL_CHECK(len_field_count(deleted_file, 10, 1) == 1);
 
   return 0;
 }

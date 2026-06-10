@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -11,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "opengil/attachment_from_decoration_ops.hpp"
 #include "opengil/attachment_ops.hpp"
 #include "opengil/gil.hpp"
 #include "opengil/custom_vars_ops.hpp"
@@ -23,7 +25,15 @@
 #include "opengil/prefab_ops.hpp"
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
+#include "opengil/ui_ops.hpp"
 #include "opengil/version.hpp"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -196,13 +206,83 @@ std::string read_text_file(const std::filesystem::path& path) {
   return out.str();
 }
 
-void write_bytes_to_path(const std::filesystem::path& path, std::span<const uint8_t> bytes) {
+std::filesystem::path unique_temp_path_for(const std::filesystem::path& path) {
+  const auto parent = path.parent_path();
+  const auto stem = path.filename().string();
+  const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    auto candidate = parent / (stem + ".tmp." + std::to_string(tick) + "." + std::to_string(attempt));
+    if (!std::filesystem::exists(candidate)) return candidate;
+  }
+  throw CliError("WRITE_FAILED", "failed to allocate temporary output path for: " + path.string(), EXIT_WRITE);
+}
+
+std::filesystem::path backup_path_for(const std::filesystem::path& path) {
+  auto backup = path;
+  backup += ".bak";
+  return backup;
+}
+
+void replace_file_atomic(const std::filesystem::path& temp_path, const std::filesystem::path& output_path) {
+#ifdef _WIN32
+  if (!MoveFileExW(
+          temp_path.wstring().c_str(),
+          output_path.wstring().c_str(),
+          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    throw CliError("WRITE_FAILED", "failed to replace output file atomically: " + output_path.string(), EXIT_WRITE);
+  }
+#else
+  std::error_code error;
+  std::filesystem::rename(temp_path, output_path, error);
+  if (error) {
+    throw CliError("WRITE_FAILED", "failed to replace output file atomically: " + error.message(), EXIT_WRITE);
+  }
+#endif
+}
+
+void write_bytes_to_path(const std::filesystem::path& path, std::span<const uint8_t> bytes, bool keep_backup) {
   const auto parent = path.parent_path();
   if (!parent.empty()) std::filesystem::create_directories(parent);
-  std::ofstream stream(path, std::ios::binary);
-  if (!stream) throw CliError("WRITE_FAILED", "failed to open output file: " + path.string(), EXIT_WRITE);
+  const auto temp_path = unique_temp_path_for(path);
+  std::ofstream stream(temp_path, std::ios::binary | std::ios::trunc);
+  if (!stream) throw CliError("WRITE_FAILED", "failed to open temporary output file: " + temp_path.string(), EXIT_WRITE);
   stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-  if (!stream) throw CliError("WRITE_FAILED", "failed to write output file: " + path.string(), EXIT_WRITE);
+  stream.flush();
+  if (!stream) {
+    std::error_code ignored;
+    std::filesystem::remove(temp_path, ignored);
+    throw CliError("WRITE_FAILED", "failed to write temporary output file: " + temp_path.string(), EXIT_WRITE);
+  }
+  stream.close();
+
+  try {
+    auto check_file = opengil::load_gil_file(temp_path);
+    const auto validation = opengil::validate_gil(check_file);
+    if (!validation.ok) {
+      throw CliError("VALIDATION_FAILED", "temporary output failed validation", EXIT_VALIDATE);
+    }
+
+    if (keep_backup && std::filesystem::exists(path)) {
+      std::error_code backup_error;
+      std::filesystem::copy_file(
+          path,
+          backup_path_for(path),
+          std::filesystem::copy_options::overwrite_existing,
+          backup_error);
+      if (backup_error) {
+        throw CliError("WRITE_FAILED", "failed to create backup file: " + backup_error.message(), EXIT_WRITE);
+      }
+    }
+    replace_file_atomic(temp_path, path);
+  } catch (...) {
+    std::error_code ignored;
+    std::filesystem::remove(temp_path, ignored);
+    throw;
+  }
+}
+
+void write_output_bytes(const Args& args, const std::filesystem::path& path, std::span<const uint8_t> bytes) {
+  write_bytes_to_path(path, bytes, args.flags.contains("in-place"));
 }
 
 std::string output_file_json(const std::filesystem::path& path, std::span<const uint8_t> bytes) {
@@ -338,18 +418,6 @@ std::string diff_summary_json(const GilFile& before, const GilFile& after) {
       << "\"changedTopFields\":[" << changed.str() << "]"
       << "}";
   return out.str();
-}
-
-std::string not_implemented_result(const Args& args) {
-  const std::string result = "{}";
-  return envelope(
-      args.command,
-      false,
-      null_input_json(),
-      "null",
-      result,
-      {},
-      {error_json("NOT_IMPLEMENTED", "this command is planned but not implemented in the current openGil milestone")});
 }
 
 std::filesystem::path resolve_write_output_path(const Args& args, const std::filesystem::path& input_path) {
@@ -628,7 +696,7 @@ std::string handle_set_model(const Args& args, bool empty_model) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -656,7 +724,7 @@ std::string handle_set_projectile_motion(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -724,7 +792,7 @@ std::string handle_custom_vars(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -760,7 +828,7 @@ std::string handle_decoration(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -776,10 +844,10 @@ std::string handle_decoration(const Args& args) {
 
 std::string handle_attachment(const Args& args) {
   if (args.positional.empty()) {
-    throw CliError("USAGE", "attachment requires a subcommand: add", EXIT_USAGE);
+    throw CliError("USAGE", "attachment requires a subcommand: add or from-decoration", EXIT_USAGE);
   }
   const std::string subcommand = args.positional[0];
-  if (subcommand != "add") {
+  if (subcommand != "add" && subcommand != "from-decoration") {
     throw CliError("USAGE", "unsupported attachment subcommand: " + subcommand, EXIT_USAGE);
   }
 
@@ -789,24 +857,55 @@ std::string handle_attachment(const Args& args) {
   const bool dry_run = args.flags.contains("dry-run");
   const uint64_t prefab_id = require_u64(args, "prefab-id");
   const auto object_id = optional_u64(args, "object-id");
-  const auto spec = attachment_spec_from_args(args);
 
-  const auto mutation = opengil::add_attachment_points(file, prefab_id, object_id, {spec});
+  opengil::AttachmentMutation mutation;
+  std::string result;
+  std::string command_name;
+  if (subcommand == "add") {
+    const auto spec = attachment_spec_from_args(args);
+    mutation = opengil::add_attachment_points(file, prefab_id, object_id, {spec});
+    result = opengil::attachment_summary_to_json(mutation.summary);
+    command_name = "attachment.add";
+  } else {
+    mutation = opengil::add_attachment_points_from_decorations(file, prefab_id, object_id);
+    result = opengil::attachment_from_decoration_summary_to_json(mutation.summary);
+    command_name = "attachment.from-decoration";
+  }
+
   std::string output_json = "null";
   if (!dry_run) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
-  std::string result = opengil::attachment_summary_to_json(mutation.summary);
   if (dry_run) {
     result.pop_back();
     result += ",\"dryRun\":true}";
   }
-  const auto json = envelope("attachment.add", true, file_input_json(file), output_json, result, {}, {});
+  const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
+std::string handle_ui(const Args& args) {
+  if (args.positional.empty()) {
+    throw CliError("USAGE", "ui requires a subcommand: list", EXIT_USAGE);
+  }
+  const std::string subcommand = args.positional[0];
+  if (subcommand != "list") {
+    throw CliError("USAGE", "unsupported ui subcommand: " + subcommand, EXIT_USAGE);
+  }
+
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t controller_entry_id = optional_u64(args, "controller-entry-id")
+      .value_or(opengil::kDefaultUiPrimitiveControllerEntryId);
+  const auto list = opengil::list_ui_primitives(file, controller_entry_id);
+  const auto result = opengil::ui_primitive_list_to_json(list);
+  const auto json = envelope("ui.list", true, file_input_json(file), "null", result, {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -836,7 +935,7 @@ std::string handle_attach_nodegraph(const Args& args, bool attach_all) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, bytes);
+    write_output_bytes(args, output_path, bytes);
     output_json = output_file_json(output_path, bytes);
   }
 
@@ -863,7 +962,7 @@ std::string handle_rename_prefab(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -890,7 +989,7 @@ std::string handle_delete_prefab(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -1025,28 +1124,34 @@ std::string handle_create_object(const Args& args) {
   }
 
   opengil::ObjectMutation mutation;
-  if (args.command == "create-scene-object") {
-    opengil::CreateSceneObjectOptions options;
-    options.object_id = optional_u64(args, "object-id");
-    options.transform = transform;
-    mutation = opengil::create_scene_object(file, require_u64(args, "asset-id"), options);
-  } else if (args.command == "create-prefab") {
-    opengil::CreatePrefabOptions options;
-    options.prefab_id = optional_u64(args, "prefab-id");
-    options.transform = transform;
-    mutation = opengil::create_prefab(file, require_u64(args, "asset-id"), options, template_file ? &*template_file : nullptr);
-  } else if (args.command == "create-scene-prefab-instance") {
-    opengil::CreateScenePrefabInstanceOptions options;
-    options.object_id = optional_u64(args, "object-id");
-    options.transform = transform;
-    mutation = opengil::create_scene_prefab_instance(
-        file,
-        require_u64(args, "prefab-id"),
-        require_u64(args, "asset-id"),
-        options,
-        template_file ? &*template_file : nullptr);
-  } else {
-    throw CliError("USAGE", "unsupported create command: " + args.command, EXIT_USAGE);
+  try {
+    if (args.command == "create-scene-object") {
+      opengil::CreateSceneObjectOptions options;
+      options.object_id = optional_u64(args, "object-id");
+      options.transform = transform;
+      mutation = opengil::create_scene_object(file, require_u64(args, "asset-id"), options);
+    } else if (args.command == "create-prefab") {
+      opengil::CreatePrefabOptions options;
+      options.prefab_id = optional_u64(args, "prefab-id");
+      options.transform = transform;
+      mutation = opengil::create_prefab(file, require_u64(args, "asset-id"), options, template_file ? &*template_file : nullptr);
+    } else if (args.command == "create-scene-prefab-instance") {
+      opengil::CreateScenePrefabInstanceOptions options;
+      options.object_id = optional_u64(args, "object-id");
+      options.transform = transform;
+      mutation = opengil::create_scene_prefab_instance(
+          file,
+          require_u64(args, "prefab-id"),
+          require_u64(args, "asset-id"),
+          options,
+          template_file ? &*template_file : nullptr);
+    } else {
+      throw CliError("USAGE", "unsupported create command: " + args.command, EXIT_USAGE);
+    }
+  } catch (const CliError&) {
+    throw;
+  } catch (const std::exception& error) {
+    throw CliError("SEMANTIC_ERROR", error.what(), EXIT_SEMANTIC);
   }
 
   std::string output_json = "null";
@@ -1054,7 +1159,7 @@ std::string handle_create_object(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -1103,7 +1208,7 @@ std::string handle_clone_prefab(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -1136,7 +1241,7 @@ std::string handle_set_transform(const Args& args, bool preview_space) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, mutation.bytes);
+    write_output_bytes(args, output_path, mutation.bytes);
     output_json = output_file_json(output_path, mutation.bytes);
   }
 
@@ -1320,7 +1425,7 @@ std::string handle_batch(const Args& args) {
     if (output_path.empty()) {
       throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
     }
-    write_bytes_to_path(output_path, final_bytes);
+    write_output_bytes(args, output_path, final_bytes);
     output_json = output_file_json(output_path, final_bytes);
   }
 
@@ -1378,7 +1483,10 @@ std::string handle_with_input(const Args& args) {
   } else if (args.command == "list-nodegraphs") {
     result = opengil::nodegraphs_to_json(opengil::list_nodegraphs(file));
   } else {
-    return not_implemented_result(args);
+    throw CliError(
+        "NOT_IMPLEMENTED",
+        "this command is planned but not implemented in the current openGil milestone",
+        EXIT_USAGE);
   }
 
   const auto json = envelope(args.command, validate_exit == EXIT_OK, file_input_json(file), "null", result, {}, {});
@@ -1456,6 +1564,8 @@ int main(int argc, char** argv) {
       output = handle_decoration(args);
     } else if (args.command == "attachment") {
       output = handle_attachment(args);
+    } else if (args.command == "ui") {
+      output = handle_ui(args);
     } else if (args.command == "batch") {
       output = handle_batch(args);
     } else {

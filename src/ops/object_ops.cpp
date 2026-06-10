@@ -5,6 +5,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 #include "opengil/json.hpp"
@@ -59,7 +60,7 @@ bool replace_varint_at_path(std::vector<OwnedField>& fields, std::span<const uin
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "nested varint child");
     if (replace_varint_at_path(child_fields, path.subspan(1), value)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -81,7 +82,7 @@ bool replace_len_data_at_path(
       return true;
     }
     if (field.wire != 2) continue;
-    auto child_fields = parse_owned_fields(field.data);
+    auto child_fields = parse_owned_fields_or_throw(field.data, "nested len child");
     if (replace_len_data_at_path(child_fields, path.subspan(1), data)) {
       field.data = rebuild_message(child_fields);
       return true;
@@ -94,7 +95,7 @@ std::vector<uint8_t> replace_nested_varint(
     std::span<const uint8_t> message,
     std::span<const uint32_t> path,
     uint64_t value) {
-  auto fields = parse_owned_fields(message);
+  auto fields = parse_owned_fields_or_throw(message, "nested varint message");
   if (!replace_varint_at_path(fields, path, value)) {
     throw std::runtime_error("nested varint path not found");
   }
@@ -122,7 +123,7 @@ std::vector<uint8_t> replace_entry_transform(
     std::span<const uint8_t> entry,
     uint32_t transform_field,
     const Transform& transform) {
-  auto fields = parse_owned_fields(entry);
+  auto fields = parse_owned_fields_or_throw(entry, "transform entry");
   const std::array<uint32_t, 2> transform_path{transform_field, 11};
   if (!replace_len_data_at_path(fields, std::span<const uint32_t>(transform_path.data(), transform_path.size()), build_transform_message(transform))) {
     throw std::runtime_error("transform path not found");
@@ -167,11 +168,31 @@ uint64_t allocate_object_id(std::span<const uint8_t> payload_bytes) {
   return saw ? max_id + 1 : 1077936129;
 }
 
+bool object_id_exists(std::span<const uint8_t> payload_bytes, uint64_t object_id) {
+  for (uint32_t top_field : {4u, 5u, 8u}) {
+    for (uint64_t existing_id : collect_ids_from_top_field(payload_bytes, top_field)) {
+      if (existing_id == object_id) return true;
+    }
+  }
+  return false;
+}
+
+uint64_t resolve_create_id(
+    std::span<const uint8_t> payload_bytes,
+    const std::optional<uint64_t>& requested_id,
+    std::string_view label) {
+  if (!requested_id) return allocate_object_id(payload_bytes);
+  if (object_id_exists(payload_bytes, *requested_id)) {
+    throw std::runtime_error(std::string(label) + " id already exists");
+  }
+  return *requested_id;
+}
+
 std::vector<uint8_t> append_repeated_entry(
     std::span<const uint8_t> top_data,
     uint32_t repeated_field,
     std::vector<uint8_t> entry) {
-  auto fields = parse_owned_fields(top_data);
+  auto fields = parse_owned_fields_or_throw(top_data, "append repeated entry");
   fields.push_back(make_len_field(repeated_field, std::move(entry)));
   return rebuild_message(fields);
 }
@@ -251,17 +272,17 @@ std::vector<uint8_t> append_mapping_to_category_id(
     uint64_t category_id,
     uint32_t mapping_type,
     uint64_t target_id) {
-  auto fields = parse_owned_fields(top6);
+  auto fields = parse_owned_fields_or_throw(top6, "top6 category mappings");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != 1 || field.wire != 2) continue;
     const std::array<uint32_t, 1> category_path{1};
     if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), category_path) != category_id) continue;
 
-    auto entry_fields = parse_owned_fields(field.data);
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "top6 category entry");
     for (auto& entry_field : entry_fields) {
       if (changed || entry_field.number != 3 || entry_field.wire != 2) continue;
-      auto category_fields = parse_owned_fields(entry_field.data);
+      auto category_fields = parse_owned_fields_or_throw(entry_field.data, "top6 category child");
       category_fields.push_back(make_len_field(5, build_mapping(mapping_type, target_id)));
       entry_field.data = rebuild_message(category_fields);
       field.data = rebuild_message(entry_fields);
@@ -299,7 +320,7 @@ ObjectMutation set_space_transform(
   const auto top = top_level_data(file, top_field_number);
   if (!top) throw std::runtime_error("top-level field not found");
 
-  auto fields = parse_owned_fields(*top);
+  auto fields = parse_owned_fields_or_throw(*top, "object space top-level field");
   bool changed = false;
   for (auto& field : fields) {
     if (changed || field.number != 1 || field.wire != 2) continue;
@@ -427,7 +448,7 @@ ObjectMutation create_scene_object(const GilFile& file, uint64_t asset_id, const
   const auto top5 = top_level_data(file, 5);
   if (!top5) throw std::runtime_error("top-level field 5 not found");
 
-  const uint64_t object_id = options.object_id.value_or(allocate_object_id(payload(file)));
+  const uint64_t object_id = resolve_create_id(payload(file), options.object_id, "object");
   auto entry = find_template_entry(*top5, {asset_id, 10003004});
   const std::array<uint32_t, 1> id_path{1};
   const std::array<uint32_t, 2> ref_path{2, 1};
@@ -453,7 +474,7 @@ ObjectMutation create_prefab(
   const auto top4 = top_level_data(file, 4);
   if (!top4) throw std::runtime_error("top-level field 4 not found");
 
-  const uint64_t prefab_id = options.prefab_id.value_or(allocate_object_id(payload(file)));
+  const uint64_t prefab_id = resolve_create_id(payload(file), options.prefab_id, "prefab");
   auto template_entry = find_prefab_template_entry(template_file, asset_id);
   auto entry = template_entry ? std::move(*template_entry) : find_template_entry(*top4, {asset_id, 1000000});
   const std::array<uint32_t, 1> id_path{1};
@@ -479,7 +500,7 @@ ObjectMutation create_scene_prefab_instance(
   const auto top5 = top_level_data(file, 5);
   if (!top5) throw std::runtime_error("top-level field 5 not found");
 
-  const uint64_t object_id = options.object_id.value_or(allocate_object_id(payload(file)));
+  const uint64_t object_id = resolve_create_id(payload(file), options.object_id, "object");
   auto template_entry = find_scene_prefab_instance_template_entry(template_file, asset_id);
   auto entry = template_entry ? std::move(*template_entry) : find_template_entry(*top5, {prefab_id, asset_id, 10003004});
   const std::array<uint32_t, 1> id_path{1};

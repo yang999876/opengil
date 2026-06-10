@@ -46,6 +46,7 @@ std::vector<uint8_t> encode_field(const OwnedField& field);
 
 bool parse_fields(std::span<const uint8_t> bytes, std::vector<Field>& out, std::string* error = nullptr);
 std::vector<OwnedField> parse_owned_fields(std::span<const uint8_t> bytes, std::string* error = nullptr);
+std::vector<OwnedField> parse_owned_fields_or_throw(std::span<const uint8_t> bytes, const std::string& context);
 std::vector<uint8_t> rebuild_message(const std::vector<OwnedField>& fields);
 OwnedField clone_owned_field(std::span<const uint8_t> message, const Field& field);
 std::optional<Field> first_len_field(std::span<const uint8_t> bytes, uint32_t field_number);

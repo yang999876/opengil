@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -93,33 +93,33 @@ int main() {
 
   const auto file = make_synthetic_file();
   const auto before_graphs = opengil::list_nodegraphs(file);
-  assert(before_graphs.size() == 1);
-  assert(before_graphs[0].role == "definition");
-  assert(before_graphs[0].id == nodegraph_id);
+  OPENGIL_CHECK(before_graphs.size() == 1);
+  OPENGIL_CHECK(before_graphs[0].role == "definition");
+  OPENGIL_CHECK(before_graphs[0].id == nodegraph_id);
 
   const auto mutation = opengil::attach_nodegraph_to_prefab(file, prefab_id, nodegraph_id);
-  assert(mutation.summary.prefab_updated);
-  assert(!mutation.summary.already_attached);
-  assert(mutation.summary.scene_updated == 1);
-  assert(mutation.summary.preview_updated == 0);
-  assert(mutation.summary.changed_top_fields.size() == 2);
-  assert(mutation.summary.changed_top_fields[0] == 4);
-  assert(mutation.summary.changed_top_fields[1] == 5);
+  OPENGIL_CHECK(mutation.summary.prefab_updated);
+  OPENGIL_CHECK(!mutation.summary.already_attached);
+  OPENGIL_CHECK(mutation.summary.scene_updated == 1);
+  OPENGIL_CHECK(mutation.summary.preview_updated == 0);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields[0] == 4);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields[1] == 5);
 
   const auto changed_file = load_mutation_as_file(mutation, "opengil-test-nodegraph.gil");
   const auto validation = opengil::validate_gil(changed_file);
-  assert(validation.ok);
+  OPENGIL_CHECK(validation.ok);
 
   const auto after_graphs = opengil::list_nodegraphs(changed_file);
   size_t reference_count = 0;
   for (const auto& graph : after_graphs) {
     if (graph.role == "reference" && graph.id == nodegraph_id) reference_count++;
   }
-  assert(reference_count >= 2);
+  OPENGIL_CHECK(reference_count >= 2);
 
   const auto repeated = opengil::attach_nodegraph_to_prefab(changed_file, prefab_id, nodegraph_id);
-  assert(repeated.summary.already_attached);
-  assert(repeated.summary.changed_top_fields.empty());
+  OPENGIL_CHECK(repeated.summary.already_attached);
+  OPENGIL_CHECK(repeated.summary.changed_top_fields.empty());
 
   return 0;
 }

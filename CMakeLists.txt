@@ -11,6 +11,7 @@ add_library(opengil_core
   src/core/json_value.cpp
   src/core/sha256.cpp
   src/core/wire.cpp
+  src/ops/attachment_from_decoration_ops.cpp
   src/ops/attachment_ops.cpp
   src/ops/custom_vars_ops.cpp
   src/ops/decoration_ops.cpp
@@ -19,6 +20,7 @@ add_library(opengil_core
   src/ops/object_ops.cpp
   src/ops/prefab_ops.cpp
   src/ops/projectile_ops.cpp
+  src/ops/ui_ops.cpp
   src/semantic/semantic.cpp
 )
 
@@ -65,6 +67,10 @@ add_executable(opengil_projectile_tests tests/unit/test_projectile_ops.cpp)
 target_link_libraries(opengil_projectile_tests PRIVATE opengil_core)
 add_test(NAME opengil_projectile_tests COMMAND opengil_projectile_tests)
 
+add_executable(opengil_ui_tests tests/unit/test_ui_ops.cpp)
+target_link_libraries(opengil_ui_tests PRIVATE opengil_core)
+add_test(NAME opengil_ui_tests COMMAND opengil_ui_tests)
+
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
 add_test(NAME opengil_object_tests COMMAND opengil_object_tests)
@@ -77,6 +83,10 @@ add_executable(opengil_attachment_tests tests/unit/test_attachment_ops.cpp)
 target_link_libraries(opengil_attachment_tests PRIVATE opengil_core)
 add_test(NAME opengil_attachment_tests COMMAND opengil_attachment_tests)
 
+add_executable(opengil_attachment_from_decoration_tests tests/unit/test_attachment_from_decoration_ops.cpp)
+target_link_libraries(opengil_attachment_from_decoration_tests PRIVATE opengil_core)
+add_test(NAME opengil_attachment_from_decoration_tests COMMAND opengil_attachment_from_decoration_tests)
+
 add_executable(opengil_custom_vars_tests tests/unit/test_custom_vars_ops.cpp)
 target_link_libraries(opengil_custom_vars_tests PRIVATE opengil_core)
 add_test(NAME opengil_custom_vars_tests COMMAND opengil_custom_vars_tests)
@@ -84,6 +94,24 @@ add_test(NAME opengil_custom_vars_tests COMMAND opengil_custom_vars_tests)
 add_test(NAME opengil_cli_validate_fixture
   COMMAND opengil validate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
 )
+
+add_test(NAME opengil_cli_ui_list_fixture
+  COMMAND opengil ui list --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+
+add_test(NAME opengil_cli_unknown_command_fails
+  COMMAND opengil frobnicate --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+set_tests_properties(opengil_cli_unknown_command_fails PROPERTIES WILL_FAIL TRUE)
+
+add_test(NAME opengil_cli_create_prefab_duplicate_id_fails
+  COMMAND opengil create-prefab
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --asset-id 20001220
+    --prefab-id 1086324737
+    --dry-run
+)
+set_tests_properties(opengil_cli_create_prefab_duplicate_id_fails PROPERTIES WILL_FAIL TRUE)
 
 add_test(NAME opengil_cli_batch_dry_run
   COMMAND opengil batch

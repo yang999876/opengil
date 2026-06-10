@@ -1,4 +1,4 @@
-#include <cassert>
+#include "test_support.hpp"
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -46,7 +46,7 @@ std::vector<uint64_t> decode_packed(std::span<const uint8_t> data) {
   size_t offset = 0;
   while (offset < data.size()) {
     const auto value = opengil::read_varint(data, offset);
-    assert(value);
+    OPENGIL_CHECK(value);
     values.push_back(value->value);
     offset = value->next;
   }
@@ -102,7 +102,7 @@ opengil::GilFile load_mutation_as_file(const Mutation& mutation, const char* nam
 
 std::vector<uint8_t> entry_by_id(const opengil::GilFile& file, uint32_t top_field, uint64_t id) {
   const auto top = opengil::top_level_data(file, top_field);
-  assert(top);
+  OPENGIL_CHECK(top);
   const std::array<uint32_t, 1> id_path{1};
   for (const auto& field : opengil::len_fields(*top, 1)) {
     const auto entry = opengil::field_data(*top, field);
@@ -110,7 +110,7 @@ std::vector<uint8_t> entry_by_id(const opengil::GilFile& file, uint32_t top_fiel
       return std::vector<uint8_t>(entry.begin(), entry.end());
     }
   }
-  assert(false);
+  OPENGIL_CHECK(false);
   return {};
 }
 
@@ -121,13 +121,13 @@ std::vector<uint8_t> bytes_at_path(std::span<const uint8_t> message, std::span<c
     if (path.size() == 1) return field.data;
     return bytes_at_path(field.data, path.subspan(1));
   }
-  assert(false);
+  OPENGIL_CHECK(false);
   return {};
 }
 
 size_t len_count(const opengil::GilFile& file, uint32_t top_field, uint32_t repeated_field) {
   const auto top = opengil::top_level_data(file, top_field);
-  assert(top);
+  OPENGIL_CHECK(top);
   return opengil::len_fields(*top, repeated_field).size();
 }
 
@@ -143,29 +143,29 @@ int main() {
   spec.transform.scale = {0.3, 0.4, 0.5};
 
   const auto mutation = opengil::add_prefab_decorations(file, 101, {spec});
-  assert(mutation.summary.prefab_id == 101);
-  assert(mutation.summary.scene_instance_count == 1);
-  assert(mutation.summary.prefab_decoration_ids.size() == 1);
-  assert(mutation.summary.prefab_decoration_ids[0] == 1003);
-  assert(mutation.summary.scene_decoration_ids.size() == 1);
-  assert(mutation.summary.scene_decoration_ids[0] == 1004);
-  assert(mutation.summary.changed_top_fields.size() == 3);
+  OPENGIL_CHECK(mutation.summary.prefab_id == 101);
+  OPENGIL_CHECK(mutation.summary.scene_instance_count == 1);
+  OPENGIL_CHECK(mutation.summary.prefab_decoration_ids.size() == 1);
+  OPENGIL_CHECK(mutation.summary.prefab_decoration_ids[0] == 1003);
+  OPENGIL_CHECK(mutation.summary.scene_decoration_ids.size() == 1);
+  OPENGIL_CHECK(mutation.summary.scene_decoration_ids[0] == 1004);
+  OPENGIL_CHECK(mutation.summary.changed_top_fields.size() == 3);
 
   const auto changed = load_mutation_as_file(mutation, "opengil-test-decoration-add.gil");
-  assert(opengil::validate_gil(changed).ok);
+  OPENGIL_CHECK(opengil::validate_gil(changed).ok);
 
   const auto prefab_entry = entry_by_id(changed, 4, 101);
   const std::array<uint32_t, 2> prefab_refs_path{6, 50};
   const auto prefab_refs = decode_packed(bytes_at_path(prefab_entry, prefab_refs_path));
-  assert((prefab_refs == std::vector<uint64_t>{0, 10, 1001, 1003}));
+  OPENGIL_CHECK((prefab_refs == std::vector<uint64_t>{0, 10, 1001, 1003}));
 
   const auto scene_entry = entry_by_id(changed, 8, 201);
   const std::array<uint32_t, 2> scene_refs_path{5, 50};
   const auto scene_refs = decode_packed(bytes_at_path(scene_entry, scene_refs_path));
-  assert((scene_refs == std::vector<uint64_t>{0, 5, 1004}));
+  OPENGIL_CHECK((scene_refs == std::vector<uint64_t>{0, 5, 1004}));
 
-  assert(len_count(changed, 27, 1) == 2);
-  assert(len_count(changed, 27, 2) == 2);
+  OPENGIL_CHECK(len_count(changed, 27, 1) == 2);
+  OPENGIL_CHECK(len_count(changed, 27, 2) == 2);
 
   return 0;
 }
