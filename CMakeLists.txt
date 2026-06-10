@@ -49,6 +49,21 @@ else()
   target_compile_options(opengil PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+add_subdirectory(third_party/pybind11)
+
+pybind11_add_module(opengil_python
+  src/python/bindings.cpp
+)
+set_target_properties(opengil_python PROPERTIES OUTPUT_NAME opengil)
+target_link_libraries(opengil_python PRIVATE opengil_core)
+
+if(MSVC)
+  target_compile_options(opengil_python PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(opengil_python PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 enable_testing()
 
 add_executable(opengil_core_tests tests/unit/test_core.cpp)
@@ -157,3 +172,10 @@ add_test(NAME opengil_cli_create_prefab_duplicate_id_fails
     --dry-run
 )
 set_tests_properties(opengil_cli_create_prefab_duplicate_id_fails PROPERTIES WILL_FAIL TRUE)
+
+add_test(NAME opengil_python_bindings
+  COMMAND ${Python_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_python_bindings.py
+    $<TARGET_FILE_DIR:opengil_python>
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures
+)

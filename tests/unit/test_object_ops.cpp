@@ -247,6 +247,20 @@ int main() {
   OPENGIL_CHECK(opengil::read_fixed32_at_path(scene_entry, scene_rot_z) == 22.0f);
   OPENGIL_CHECK(opengil::read_fixed32_at_path(scene_entry, scene_scale_y) == 3.0f);
 
+  const auto scene_asset = opengil::set_scene_object_asset_id(file, 501, 20001221);
+  OPENGIL_CHECK(scene_asset.summary.kind == "sceneObjectAsset");
+  OPENGIL_CHECK(scene_asset.summary.object_id == 501);
+  OPENGIL_CHECK(scene_asset.summary.asset_id == 20001221);
+  OPENGIL_CHECK(scene_asset.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(scene_asset.changed_top_fields[0] == 5);
+  const auto scene_asset_file = load_mutation_as_file(scene_asset, "opengil-test-scene-asset.gil");
+  OPENGIL_CHECK(opengil::validate_gil(scene_asset_file).ok);
+  const auto scene_asset_entry = first_entry(scene_asset_file, 5);
+  const std::array<uint32_t, 2> ref_path{2, 1};
+  const std::array<uint32_t, 1> asset_path{8};
+  OPENGIL_CHECK(opengil::read_varint_at_path(scene_asset_entry, ref_path) == 20001221);
+  OPENGIL_CHECK(opengil::read_varint_at_path(scene_asset_entry, asset_path) == 20001221);
+
   const auto preview = opengil::set_preview_transform(file, 801, transform);
   OPENGIL_CHECK(preview.changed_top_fields.size() == 1);
   OPENGIL_CHECK(preview.changed_top_fields[0] == 8);
@@ -270,8 +284,6 @@ int main() {
   OPENGIL_CHECK(scene_entries.size() == 2);
   const auto new_scene_entry = std::span<const uint8_t>(scene_entries[1].data(), scene_entries[1].size());
   const std::array<uint32_t, 1> id_path{1};
-  const std::array<uint32_t, 2> ref_path{2, 1};
-  const std::array<uint32_t, 1> asset_path{8};
   OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, id_path) == 9001);
   OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, ref_path) == 20001220);
   OPENGIL_CHECK(opengil::read_varint_at_path(new_scene_entry, asset_path) == 20001220);

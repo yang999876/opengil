@@ -20,4 +20,5 @@ Testing/
 *.summary.json
 *.tmp.gil
 *.roundtrip.gil
-
+*.code-workspace
+release/

@@ -345,6 +345,23 @@ ObjectMutation set_space_transform(
   return mutation;
 }
 
+std::vector<uint8_t> replace_scene_asset_id(std::span<const uint8_t> entry, uint64_t asset_id) {
+  auto fields = parse_owned_fields_or_throw(entry, "scene object asset entry");
+  const std::array<uint32_t, 1> asset_path{8};
+  const std::array<uint32_t, 2> ref_path{2, 1};
+  const auto previous_asset_id = read_varint_path(entry, asset_path);
+  if (!replace_varint_at_path(fields, std::span<const uint32_t>(asset_path.data(), asset_path.size()), asset_id)) {
+    throw std::runtime_error("scene object asset id path not found");
+  }
+
+  const auto ref_id = read_varint_path(entry, ref_path);
+  if (previous_asset_id && ref_id == previous_asset_id) {
+    replace_varint_at_path(fields, std::span<const uint32_t>(ref_path.data(), ref_path.size()), asset_id);
+  }
+
+  return rebuild_message(fields);
+}
+
 ObjectMutation make_object_mutation(
     const GilFile& file,
     std::vector<uint8_t> next_payload,
@@ -491,6 +508,33 @@ ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, cons
 
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform) {
   return set_space_transform(file, 8, 6, "previewTransform", object_id, transform);
+}
+
+ObjectMutation set_scene_object_asset_id(const GilFile& file, uint64_t object_id, uint64_t asset_id) {
+  const auto top5 = top_level_data(file, 5);
+  if (!top5) throw std::runtime_error("top-level field 5 not found");
+
+  auto fields = parse_owned_fields_or_throw(*top5, "scene object top-level field");
+  bool changed = false;
+  for (auto& field : fields) {
+    if (changed || field.number != 1 || field.wire != 2) continue;
+    const std::span<const uint8_t> entry(field.data.data(), field.data.size());
+    const std::array<uint32_t, 1> id_path{1};
+    if (read_varint_path(entry, id_path) != object_id) continue;
+    field.data = replace_scene_asset_id(entry, asset_id);
+    changed = true;
+  }
+  if (!changed) throw std::runtime_error("object id not found");
+
+  std::vector<uint32_t> changed_top_fields{5};
+  auto next_payload = replace_top_level_field_data(payload(file), 5, rebuild_message(fields));
+
+  ObjectSummary summary;
+  summary.kind = "sceneObjectAsset";
+  summary.object_id = object_id;
+  summary.asset_id = asset_id;
+  summary.changed_top_fields = changed_top_fields;
+  return make_object_mutation(file, std::move(next_payload), std::move(summary), std::move(changed_top_fields));
 }
 
 }  // namespace opengil

@@ -74,5 +74,6 @@ ObjectMutation create_scene_prefab_instance(
 
 ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
+ObjectMutation set_scene_object_asset_id(const GilFile& file, uint64_t object_id, uint64_t asset_id);
 
 }  // namespace opengil
