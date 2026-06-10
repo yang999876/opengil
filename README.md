@@ -30,4 +30,8 @@ The CLI target is `opengil`.
 All machine-facing command output is JSON on stdout. Logs and diagnostics go to
 stderr.
 
+`validate` performs structural validation only: it checks the `.gil` envelope
+sizes and protobuf wire parsing. It does not prove semantic consistency such as
+unique ids, mirrored scene/preview records, tab mappings, or dangling references.
+
 See `skills/gil-editing/references/cli-usage.md` for the full command reference.

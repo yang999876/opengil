@@ -439,6 +439,8 @@ std::string inspect_result(const GilFile& file) {
 std::string validate_result_json(const opengil::ValidationResult& validation) {
   std::ostringstream out;
   out << "{"
+      << "\"validationKind\":\"structural\","
+      << "\"semanticValidation\":\"notPerformed\","
       << "\"valid\":" << opengil::json::bool_value(validation.ok) << ","
       << "\"errors\":" << opengil::json::string_array(validation.errors) << ","
       << "\"warnings\":" << opengil::json::string_array(validation.warnings)

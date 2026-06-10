@@ -14,7 +14,8 @@ Use `opengil` as the primary tool for `.gil` work.
 - Prefer `--tab-id` over `--tab` on Windows command lines when tab names contain non-ASCII text.
 - Use `--dry-run` before complex writes.
 - Use `batch` for repeated edits so the file is opened and written once.
-- Validate after every write.
+- Run structural `validate` after every write.
+- Do not treat structural `validate` as semantic proof; it does not check mirrored records, duplicate ids, tab mappings, or dangling references.
 - Do not dump full JSON IR unless explicitly debugging legacy behavior.
 - Do not guess unknown structures. Ask for `before.gil` and `after.gil`, run `diff-summary`, then make a replay-first workflow.
 
@@ -29,6 +30,8 @@ opengil validate --input output.gil
 ```
 
 Stdout is machine JSON. Keep stderr as logs only.
+`validate` reports structural validity only; use operation-specific summaries and
+known semantic paths for semantic confidence until `validate --semantic` exists.
 
 ## References
 

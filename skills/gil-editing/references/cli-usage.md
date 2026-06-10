@@ -16,6 +16,12 @@ opengil list-nodegraphs --input test.gil
 opengil get-model --input test.gil --prefab-id 1077936130
 ```
 
+`validate` is structural validation only. It checks the `.gil` envelope and
+payload wire parse, and reports `"validationKind":"structural"` with
+`"semanticValidation":"notPerformed"`. It does not check semantic consistency
+such as unique ids, mirrored prefab/scene/preview records, tab mappings, or
+dangling references.
+
 Implemented write commands:
 
 ```powershell
