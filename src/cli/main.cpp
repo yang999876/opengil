@@ -18,7 +18,6 @@
 #include "opengil/custom_vars_ops.hpp"
 #include "opengil/decoration_ops.hpp"
 #include "opengil/json.hpp"
-#include "opengil/json_value.hpp"
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
 #include "opengil/object_ops.hpp"
@@ -66,41 +65,6 @@ struct CliError : std::runtime_error {
 };
 
 opengil::UiPrimitiveTransform ui_transform_from_args(const Args& args);
-
-struct BatchOp {
-  std::string op;
-  uint64_t prefab_id = 0;
-  uint64_t object_id = 0;
-  uint64_t source_prefab_id = 0;
-  uint64_t target_prefab_id = 0;
-  std::optional<uint64_t> asset_id;
-  std::optional<uint64_t> nodegraph_id;
-  std::optional<uint64_t> tab_id;
-  std::optional<uint64_t> new_prefab_id;
-  std::optional<uint64_t> requested_object_id;
-  std::optional<uint64_t> prefab_id_start_after;
-  std::optional<double> x;
-  std::optional<double> y;
-  std::optional<double> angle_deg;
-  std::optional<double> speed;
-  std::optional<double> gravity;
-  std::optional<double> preview_x_step;
-  std::optional<double> preview_z_step;
-  std::optional<double> pos_x;
-  std::optional<double> pos_y;
-  std::optional<double> pos_z;
-  std::optional<double> rot_x;
-  std::optional<double> rot_y;
-  std::optional<double> rot_z;
-  std::optional<double> scale_x;
-  std::optional<double> scale_y;
-  std::optional<double> scale_z;
-  std::string name;
-  std::string display_name;
-  std::string type;
-  std::string tab;
-  std::string template_path;
-};
 
 Args parse_args(int argc, char** argv) {
   Args args;
@@ -246,19 +210,6 @@ std::string file_input_json(const GilFile& file) {
 
 std::string null_input_json() {
   return "null";
-}
-
-std::string read_text_file(const std::filesystem::path& path) {
-  std::ifstream stream(path, std::ios::binary);
-  if (!stream) {
-    throw CliError("FILE_ERROR", "failed to open file: " + path.string(), EXIT_PARSE);
-  }
-  std::ostringstream out;
-  out << stream.rdbuf();
-  if (!stream.good() && !stream.eof()) {
-    throw CliError("FILE_ERROR", "failed to read file: " + path.string(), EXIT_PARSE);
-  }
-  return out.str();
 }
 
 std::filesystem::path unique_temp_path_for(const std::filesystem::path& path) {
@@ -499,76 +450,6 @@ std::filesystem::path resolve_write_output_path(const Args& args, const std::fil
   return output.empty() ? std::filesystem::path{} : std::filesystem::path(output);
 }
 
-const opengil::json::Value* find_any(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys) {
-  for (std::string_view key : keys) {
-    if (const auto* value = object.find(key)) return value;
-  }
-  return nullptr;
-}
-
-std::string batch_context(size_t index) {
-  std::ostringstream out;
-  out << "batch op " << index;
-  return out.str();
-}
-
-std::string require_json_string(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys,
-    size_t index) {
-  const auto* value = find_any(object, keys);
-  if (!value || !value->is_string()) {
-    throw CliError("USAGE", batch_context(index) + " is missing a required string field", EXIT_USAGE);
-  }
-  return value->string_value;
-}
-
-uint64_t require_json_u64(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys,
-    size_t index) {
-  const auto* value = find_any(object, keys);
-  if (!value || !value->is_unsigned()) {
-    throw CliError("USAGE", batch_context(index) + " is missing a required unsigned integer field", EXIT_USAGE);
-  }
-  return value->unsigned_value;
-}
-
-std::optional<uint64_t> optional_json_u64(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys) {
-  const auto* value = find_any(object, keys);
-  if (!value) return std::nullopt;
-  if (!value->is_unsigned()) {
-    throw CliError("USAGE", "batch unsigned integer field must be a JSON integer >= 0", EXIT_USAGE);
-  }
-  return value->unsigned_value;
-}
-
-std::optional<std::string> optional_json_string(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys) {
-  const auto* value = find_any(object, keys);
-  if (!value) return std::nullopt;
-  if (!value->is_string()) {
-    throw CliError("USAGE", "batch string field must be a JSON string", EXIT_USAGE);
-  }
-  return value->string_value;
-}
-
-std::optional<double> optional_json_number(
-    const opengil::json::Value& object,
-    std::initializer_list<std::string_view> keys) {
-  const auto* value = find_any(object, keys);
-  if (!value) return std::nullopt;
-  if (!value->is_number()) {
-    throw CliError("USAGE", "batch numeric field must be a JSON number", EXIT_USAGE);
-  }
-  return value->number_value;
-}
-
 opengil::ProjectileMotionInput projectile_input_from_numbers(
     std::optional<double> x,
     std::optional<double> y,
@@ -603,150 +484,6 @@ opengil::ProjectileMotionInput projectile_input_from_args(const Args& args) {
       angle_deg,
       optional_double(args, "speed"),
       optional_double(args, "gravity"));
-}
-
-std::vector<BatchOp> parse_batch_ops_text(const std::string& text) {
-  opengil::json::Value root;
-  try {
-    root = opengil::json::parse_value(text);
-  } catch (const std::exception& error) {
-    throw CliError("OPS_JSON_INVALID", error.what(), EXIT_USAGE);
-  }
-
-  const opengil::json::Value* ops = nullptr;
-  if (root.is_array()) {
-    ops = &root;
-  } else if (root.is_object()) {
-    ops = root.find("ops");
-  }
-
-  if (!ops || !ops->is_array()) {
-    throw CliError("USAGE", "batch ops must be a JSON array or an object with an ops array", EXIT_USAGE);
-  }
-
-  std::vector<BatchOp> parsed;
-  parsed.reserve(ops->array_value.size());
-  for (size_t index = 0; index < ops->array_value.size(); ++index) {
-    const auto& item = ops->array_value[index];
-    if (!item.is_object()) {
-      throw CliError("USAGE", batch_context(index) + " must be a JSON object", EXIT_USAGE);
-    }
-
-    BatchOp op;
-    op.op = require_json_string(item, {"op", "command"}, index);
-    const auto parse_transform_fields = [&]() {
-      op.pos_x = optional_json_number(item, {"posX", "pos-x", "positionX", "position-x"});
-      op.pos_y = optional_json_number(item, {"posY", "pos-y", "positionY", "position-y"});
-      op.pos_z = optional_json_number(item, {"posZ", "pos-z", "positionZ", "position-z"});
-      op.rot_x = optional_json_number(item, {"rotX", "rot-x", "rotationX", "rotation-x"});
-      op.rot_y = optional_json_number(item, {"rotY", "rot-y", "rotationY", "rotation-y"});
-      op.rot_z = optional_json_number(item, {"rotZ", "rot-z", "rotationZ", "rotation-z"});
-      op.scale_x = optional_json_number(item, {"scaleX", "scale-x"});
-      op.scale_y = optional_json_number(item, {"scaleY", "scale-y"});
-      op.scale_z = optional_json_number(item, {"scaleZ", "scale-z"});
-    };
-    if (op.op == "set-model") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.asset_id = require_json_u64(item, {"assetId", "asset-id", "modelAssetId", "model-asset-id"}, index);
-    } else if (op.op == "set-empty-model") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-    } else if (op.op == "rename-prefab") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
-    } else if (op.op == "delete-prefab") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-    } else if (op.op == "attach-nodegraph") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.nodegraph_id = require_json_u64(item, {"nodegraphId", "nodegraph-id"}, index);
-    } else if (op.op == "set-projectile-motion") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.x = optional_json_number(item, {"x", "velocityX", "velocity-x"});
-      op.y = optional_json_number(item, {"y", "velocityY", "velocity-y"});
-      op.angle_deg = optional_json_number(item, {"angleDeg", "angle-deg", "angle"});
-      op.speed = optional_json_number(item, {"speed"});
-      op.gravity = optional_json_number(item, {"gravity"});
-      (void)projectile_input_from_numbers(op.x, op.y, op.angle_deg, op.speed, op.gravity);
-    } else if (op.op == "custom-vars.add") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.name = require_json_string(item, {"name"}, index);
-      op.type = require_json_string(item, {"type"}, index);
-    } else if (op.op == "custom-vars.remove") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.name = require_json_string(item, {"name"}, index);
-    } else if (op.op == "custom-vars.copy-all") {
-      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id", "fromPrefabId", "from-prefab-id"}, index);
-      op.target_prefab_id = require_json_u64(item, {"targetPrefabId", "target-prefab-id", "toPrefabId", "to-prefab-id"}, index);
-    } else if (op.op == "custom-vars.sync-tab") {
-      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
-      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
-      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
-      if (!op.tab_id && op.tab.empty()) {
-        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
-      }
-    } else if (op.op == "clone-prefab") {
-      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
-      op.name = require_json_string(item, {"name", "newName", "new-name"}, index);
-      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
-      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
-      op.new_prefab_id = optional_json_u64(item, {"newPrefabId", "new-prefab-id", "prefabId", "prefab-id"});
-      op.prefab_id_start_after = optional_json_u64(item, {"prefabIdStartAfter", "prefab-id-start-after"});
-      op.preview_x_step = optional_json_number(item, {"previewXStep", "preview-x-step"});
-      op.preview_z_step = optional_json_number(item, {"previewZStep", "preview-z-step"});
-      if (!op.tab_id && op.tab.empty()) {
-        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
-      }
-    } else if (op.op == "copy-prefab-to-tab") {
-      op.source_prefab_id = require_json_u64(item, {"sourcePrefabId", "source-prefab-id"}, index);
-      op.name = optional_json_string(item, {"name", "newName", "new-name"}).value_or("");
-      op.tab_id = optional_json_u64(item, {"tabId", "tab-id"});
-      op.tab = optional_json_string(item, {"tab", "tabName", "tab-name"}).value_or("");
-      op.new_prefab_id = optional_json_u64(item, {"newPrefabId", "new-prefab-id", "prefabId", "prefab-id"});
-      op.prefab_id_start_after = optional_json_u64(item, {"prefabIdStartAfter", "prefab-id-start-after"});
-      op.preview_x_step = optional_json_number(item, {"previewXStep", "preview-x-step"});
-      op.preview_z_step = optional_json_number(item, {"previewZStep", "preview-z-step"});
-      if (!op.tab_id && op.tab.empty()) {
-        throw CliError("USAGE", batch_context(index) + " must include tabId or tab", EXIT_USAGE);
-      }
-    } else if (op.op == "create-scene-object") {
-      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
-      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
-      parse_transform_fields();
-    } else if (op.op == "create-prefab") {
-      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
-      op.new_prefab_id = optional_json_u64(item, {"prefabId", "prefab-id", "newPrefabId", "new-prefab-id"});
-      op.template_path = optional_json_string(item, {"template", "templatePath", "template-path"}).value_or("");
-      parse_transform_fields();
-    } else if (op.op == "create-scene-prefab-instance") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
-      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
-      op.template_path = optional_json_string(item, {"template", "templatePath", "template-path"}).value_or("");
-      parse_transform_fields();
-    } else if (op.op == "decoration.add") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.asset_id = require_json_u64(item, {"assetId", "asset-id"}, index);
-      op.name = require_json_string(item, {"name"}, index);
-      parse_transform_fields();
-    } else if (op.op == "attachment.add") {
-      op.prefab_id = require_json_u64(item, {"prefabId", "prefab-id"}, index);
-      op.requested_object_id = optional_json_u64(item, {"objectId", "object-id"});
-      op.name = require_json_string(item, {"name"}, index);
-      op.display_name = require_json_string(item, {"displayName", "display-name"}, index);
-      parse_transform_fields();
-    } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
-      op.object_id = require_json_u64(item, {"objectId", "object-id"}, index);
-      parse_transform_fields();
-    } else {
-      throw CliError("USAGE", batch_context(index) + " uses unsupported op: " + op.op, EXIT_USAGE);
-    }
-    parsed.push_back(std::move(op));
-  }
-
-  return parsed;
-}
-
-void add_changed_fields(std::set<uint32_t>& changed, const std::vector<uint32_t>& fields) {
-  for (uint32_t field : fields) changed.insert(field);
 }
 
 opengil::DecorationSpec decoration_spec_from_args(const Args& args);
@@ -1190,15 +927,6 @@ opengil::ClonePrefabOptions clone_options_from_args(const Args& args) {
   return options;
 }
 
-opengil::ClonePrefabOptions clone_options_from_batch_op(const BatchOp& op) {
-  opengil::ClonePrefabOptions options;
-  options.new_prefab_id = op.new_prefab_id;
-  options.prefab_id_start_after = op.prefab_id_start_after;
-  if (op.preview_x_step) options.preview_x_step = *op.preview_x_step;
-  if (op.preview_z_step) options.preview_z_step = *op.preview_z_step;
-  return options;
-}
-
 opengil::Transform transform_from_values(
     std::optional<double> pos_x,
     std::optional<double> pos_y,
@@ -1248,32 +976,11 @@ opengil::UiPrimitiveTransform ui_transform_from_args(const Args& args) {
   return transform;
 }
 
-opengil::Transform transform_from_batch_op(const BatchOp& op) {
-  return transform_from_values(
-      op.pos_x,
-      op.pos_y,
-      op.pos_z,
-      op.rot_x,
-      op.rot_y,
-      op.rot_z,
-      op.scale_x,
-      op.scale_y,
-      op.scale_z);
-}
-
 opengil::DecorationSpec decoration_spec_from_args(const Args& args) {
   opengil::DecorationSpec spec;
   spec.asset_id = require_u64(args, "asset-id");
   spec.name = require_value(args, "name");
   spec.transform = transform_from_args(args);
-  return spec;
-}
-
-opengil::DecorationSpec decoration_spec_from_batch_op(const BatchOp& op) {
-  opengil::DecorationSpec spec;
-  spec.asset_id = *op.asset_id;
-  spec.name = op.name;
-  spec.transform = transform_from_batch_op(op);
   return spec;
 }
 
@@ -1296,10 +1003,6 @@ opengil::AttachmentPointSpec attachment_spec_from_args(const Args& args) {
       require_value(args, "name"),
       require_value(args, "display-name"),
       transform_from_args(args));
-}
-
-opengil::AttachmentPointSpec attachment_spec_from_batch_op(const BatchOp& op) {
-  return attachment_spec_from_values(op.name, op.display_name, transform_from_batch_op(op));
 }
 
 std::string handle_create_object(const Args& args) {
@@ -1443,204 +1146,6 @@ std::string handle_set_transform(const Args& args, bool preview_space) {
   return json;
 }
 
-std::string handle_batch(const Args& args) {
-  const auto input_path = std::filesystem::path(require_value(args, "input"));
-  GilFile input_file = opengil::load_gil_file(input_path);
-  const auto output_path = resolve_write_output_path(args, input_path);
-  const bool dry_run = args.flags.contains("dry-run");
-  const auto ops_path = std::filesystem::path(require_value(args, "ops"));
-  const auto ops = parse_batch_ops_text(read_text_file(ops_path));
-
-  GilFile current = input_file;
-  std::vector<uint8_t> final_bytes = input_file.bytes;
-  std::vector<std::string> item_jsons;
-  std::set<uint32_t> changed_top_fields;
-  item_jsons.reserve(ops.size());
-
-  for (size_t index = 0; index < ops.size(); ++index) {
-    const auto& op = ops[index];
-    try {
-      std::string result_json;
-      if (op.op == "set-model") {
-        const auto mutation = opengil::set_prefab_model_asset_id(current, op.prefab_id, *op.asset_id);
-        result_json = opengil::cli::set_model_summary_to_json(mutation.model_summary);
-        add_changed_fields(changed_top_fields, mutation.model_summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "set-empty-model") {
-        const auto mutation = opengil::set_prefab_to_empty_model(current, op.prefab_id);
-        result_json = opengil::cli::set_model_summary_to_json(mutation.model_summary);
-        add_changed_fields(changed_top_fields, mutation.model_summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "rename-prefab") {
-        const auto mutation = opengil::rename_prefab(current, op.prefab_id, op.name);
-        result_json = opengil::cli::rename_prefab_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "delete-prefab") {
-        const auto mutation = opengil::delete_prefab(current, op.prefab_id);
-        result_json = opengil::cli::delete_prefab_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "attach-nodegraph") {
-        const auto mutation = opengil::attach_nodegraph_to_prefab(current, op.prefab_id, *op.nodegraph_id);
-        result_json = opengil::cli::attach_nodegraph_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "set-projectile-motion") {
-        const auto motion = projectile_input_from_numbers(op.x, op.y, op.angle_deg, op.speed, op.gravity);
-        const auto mutation = opengil::set_prefab_projectile_motion(current, op.prefab_id, motion);
-        result_json = opengil::cli::projectile_motion_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "custom-vars.add") {
-        const auto mutation = opengil::add_prefab_custom_variable(current, op.prefab_id, op.name, op.type);
-        result_json = opengil::cli::custom_vars_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "custom-vars.remove") {
-        const auto mutation = opengil::remove_prefab_custom_variable(current, op.prefab_id, op.name);
-        result_json = opengil::cli::custom_vars_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "custom-vars.copy-all") {
-        const auto mutation = opengil::copy_prefab_custom_variables(current, op.source_prefab_id, op.target_prefab_id);
-        result_json = opengil::cli::custom_vars_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "custom-vars.sync-tab") {
-        const auto mutation = op.tab_id
-            ? opengil::sync_tab_custom_variables_by_tab_id(current, op.source_prefab_id, *op.tab_id)
-            : opengil::sync_tab_custom_variables(current, op.source_prefab_id, op.tab);
-        result_json = opengil::cli::custom_vars_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "clone-prefab") {
-        const auto options = clone_options_from_batch_op(op);
-        const auto mutation = op.tab_id
-            ? opengil::clone_prefab_into_tab_by_id(current, op.source_prefab_id, *op.tab_id, op.name, options)
-            : opengil::clone_prefab_into_tab(current, op.source_prefab_id, op.tab, op.name, options);
-        result_json = opengil::cli::clone_prefab_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "copy-prefab-to-tab") {
-        const auto options = clone_options_from_batch_op(op);
-        const std::optional<std::string> optional_name = op.name.empty()
-            ? std::nullopt
-            : std::optional<std::string>(op.name);
-        const auto mutation = op.tab_id
-            ? opengil::copy_prefab_to_tab_by_id(current, op.source_prefab_id, *op.tab_id, optional_name, options)
-            : opengil::copy_prefab_to_tab(current, op.source_prefab_id, op.tab, optional_name, options);
-        result_json = opengil::cli::copy_prefab_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "create-scene-object") {
-        opengil::CreateSceneObjectOptions options;
-        options.object_id = op.requested_object_id;
-        options.transform = transform_from_batch_op(op);
-        const auto mutation = opengil::create_scene_object(current, *op.asset_id, options);
-        result_json = opengil::cli::object_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "create-prefab") {
-        std::optional<GilFile> template_file;
-        if (!op.template_path.empty()) template_file = opengil::load_gil_file(op.template_path);
-        opengil::CreatePrefabOptions options;
-        options.prefab_id = op.new_prefab_id;
-        options.transform = transform_from_batch_op(op);
-        const auto mutation = opengil::create_prefab(
-            current,
-            *op.asset_id,
-            options,
-            template_file ? &*template_file : nullptr);
-        result_json = opengil::cli::object_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "create-scene-prefab-instance") {
-        std::optional<GilFile> template_file;
-        if (!op.template_path.empty()) template_file = opengil::load_gil_file(op.template_path);
-        opengil::CreateScenePrefabInstanceOptions options;
-        options.object_id = op.requested_object_id;
-        options.transform = transform_from_batch_op(op);
-        const auto mutation = opengil::create_scene_prefab_instance(
-            current,
-            op.prefab_id,
-            *op.asset_id,
-            options,
-            template_file ? &*template_file : nullptr);
-        result_json = opengil::cli::object_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "decoration.add") {
-        const auto spec = decoration_spec_from_batch_op(op);
-        const auto mutation = opengil::add_prefab_decorations(current, op.prefab_id, {spec});
-        result_json = opengil::cli::decoration_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "attachment.add") {
-        const auto spec = attachment_spec_from_batch_op(op);
-        const auto mutation = opengil::add_attachment_points(current, op.prefab_id, op.requested_object_id, {spec});
-        result_json = opengil::cli::attachment_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.summary.changed_top_fields);
-        final_bytes = mutation.bytes;
-      } else if (op.op == "set-scene-transform" || op.op == "set-preview-transform") {
-        const auto transform = transform_from_batch_op(op);
-        const auto mutation = op.op == "set-preview-transform"
-            ? opengil::set_preview_transform(current, op.object_id, transform)
-            : opengil::set_scene_transform(current, op.object_id, transform);
-        result_json = opengil::cli::object_summary_to_json(mutation.summary);
-        add_changed_fields(changed_top_fields, mutation.changed_top_fields);
-        final_bytes = mutation.bytes;
-      }
-
-      current.bytes = final_bytes;
-      std::ostringstream item;
-      item << "{"
-           << "\"index\":" << index << ","
-           << "\"op\":" << opengil::json::quote(op.op) << ","
-           << "\"result\":" << result_json
-           << "}";
-      item_jsons.push_back(item.str());
-    } catch (const std::exception& error) {
-      throw CliError(
-          "BATCH_OP_FAILED",
-          batch_context(index) + " (" + op.op + ") failed: " + error.what(),
-          EXIT_SEMANTIC);
-    }
-  }
-
-  std::string output_json = "null";
-  if (!dry_run) {
-    if (output_path.empty()) {
-      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
-    }
-    write_output_bytes(args, output_path, final_bytes);
-    output_json = output_file_json(output_path, final_bytes);
-  }
-
-  std::ostringstream result;
-  result << "{"
-         << "\"opCount\":" << ops.size() << ","
-         << "\"changedTopFields\":[";
-  bool first = true;
-  for (uint32_t field : changed_top_fields) {
-    if (!first) result << ",";
-    first = false;
-    result << field;
-  }
-  result << "],\"items\":[";
-  for (size_t i = 0; i < item_jsons.size(); ++i) {
-    if (i) result << ",";
-    result << item_jsons[i];
-  }
-  result << "]";
-  if (dry_run) result << ",\"dryRun\":true";
-  result << "}";
-
-  const auto json = envelope(args.command, true, file_input_json(input_file), output_json, result.str(), {}, {});
-  write_report_if_requested(args, json);
-  return json;
-}
-
 std::string handle_with_input(const Args& args) {
   const auto input_path = require_value(args, "input");
   GilFile file = opengil::load_gil_file(input_path);
@@ -1673,7 +1178,7 @@ std::string handle_with_input(const Args& args) {
   } else {
     throw CliError(
         "NOT_IMPLEMENTED",
-        "this command is planned but not implemented in the current openGil milestone",
+        "unknown or unsupported command",
         EXIT_USAGE);
   }
 
@@ -1754,8 +1259,6 @@ int main(int argc, char** argv) {
       output = handle_attachment(args);
     } else if (args.command == "ui") {
       output = handle_ui(args);
-    } else if (args.command == "batch") {
-      output = handle_batch(args);
     } else {
       output = handle_with_input(args);
     }

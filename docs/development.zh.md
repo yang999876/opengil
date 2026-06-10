@@ -70,7 +70,7 @@ src/cli/              CLI 参数解析、文件写入策略、stdout JSON 输出
 - `core` 只处理底层字节、wire 格式、文件 envelope、结构校验。
 - `semantic` 只做读取和查询，返回结构化数据。
 - `ops` 做修改，返回结构化 summary。
-- `cli` 负责命令行参数、文件写入、JSON 输出、exit code、batch、dry-run。
+- `cli` 负责命令行参数、文件写入、JSON 输出、exit code、dry-run。
 
 一个非常重要的新规则是：
 
@@ -102,7 +102,6 @@ src/cli/json_formatters.cpp
 src/core/gil.cpp       .gil envelope 解析、构建、结构 validate
 src/core/wire.cpp      protobuf wire parser、field rebuild、字段工具
 src/core/sha256.cpp    CLI report 里用到的 sha256
-src/core/json_value.cpp batch ops.json 用的小型 JSON parser
 ```
 
 语义查询：
@@ -139,7 +138,7 @@ src/ops/ui_structure_ops.cpp           UI append/retain/copy structure
 CLI：
 
 ```text
-src/cli/main.cpp             命令解析、dispatch、写入策略、batch
+src/cli/main.cpp             命令解析、dispatch、写入策略
 src/cli/json_formatters.cpp  CLI JSON result 输出
 ```
 
@@ -147,7 +146,6 @@ src/cli/json_formatters.cpp  CLI JSON result 输出
 
 - 参数解析
 - 文件写入策略
-- batch parser
 - command handlers
 
 不要再拆一个只有转发意义的 `app.cpp`。
@@ -312,24 +310,14 @@ src/cli/main.cpp
 5. 用 formatter 输出标准 envelope JSON
 6. 支持 `--report`
 
-### 第五步：接 batch
+### 第五步：新增 CLI 单次操作
 
-如果这个操作很可能被 agent 批量调用，就应该接入 batch。
+新增能力应该先接成清晰的 CLI 单次原子操作，保持输入、dry-run、写出和
+JSON envelope 行为稳定。
 
-需要改：
-
-- batch op 数据结构
-- batch JSON parser
-- batch dispatch
-- batch 测试 fixture
-
-agent 做大量修改时，应该优先生成 `ops.json`，然后一次调用：
-
-```powershell
-opengil batch --input in.gil --output out.gil --ops ops.json
-```
-
-不要让 agent 反复启动 CLI、反复解析同一个 `.gil`。
+未来需要批量修改时，由 Python `.pyd` / Python binding 暴露内存态
+operation/document API：一次读取 `.gil`，在同一个 document 上连续应用多个
+operation，最后统一 dry-run 或写出。CLI 不再承担批处理编排职责。
 
 ### 第六步：加测试
 
@@ -387,7 +375,6 @@ rg '#include "opengil/json.hpp"' src/ops src/semantic
 .\build\Release\opengil.exe list-prefabs --input .\tests\fixtures\test1.gil
 .\build\Release\opengil.exe set-model --input .\tests\fixtures\test1.gil --prefab-id 1086324737 --asset-id 20001220 --dry-run
 .\build\Release\opengil.exe custom-vars add --input .\tests\fixtures\test1.gil --prefab-id 1086324737 --name openGilVar --type str --dry-run
-.\build\Release\opengil.exe batch --input .\tests\fixtures\test1.gil --ops .\tests\fixtures\batch-model-rename.json --dry-run
 ```
 
 ## Agent Skill 的关系
@@ -405,7 +392,7 @@ skill 的原则应该是：
 - 写操作先 inspect，复杂操作先 dry-run
 - 优先使用 id，不靠名字写入
 - 写后必须 validate
-- 批量修改优先生成 `ops.json` 调 `batch`
+- 多次修改暂时逐条 dry-run / 写入；未来使用 Python binding 的内存态 document API 批处理
 - 未知结构不要猜，要走 before/after diff
 
 如果一个功能已经在 CLI 里稳定实现，skill 应该调用 CLI，而不是重新写脚本解析 `.gil`。

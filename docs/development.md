@@ -110,8 +110,12 @@ Use this route for most new atomic features.
    - produce the standard envelope JSON
    - support `--report` through existing helpers when applicable
 
-5. Add batch support if the operation is useful for repeated agent edits.
-   Extend the batch op parser and the batch dispatch in `src/cli/main.cpp`.
+5. Add a single-operation CLI command.
+   New CLI support should expose one clear atomic operation with stable
+   argument parsing, dry-run/write behavior, and standard envelope JSON. Future
+   bulk workflows should use a Python `.pyd` / Python binding operation/document
+   API that keeps the `.gil` document in memory while multiple operations are
+   applied.
 
 6. Add tests.
    Prefer unit tests for structured summaries and mutation behavior. Add CLI
@@ -152,7 +156,6 @@ Core files:
 src/core/gil.cpp       .gil envelope parse/build and structural validation
 src/core/wire.cpp      protobuf wire parser/rebuilder and field utilities
 src/core/sha256.cpp    sha256 for CLI input/output reports
-src/core/json_value.cpp small JSON parser used for batch input
 ```
 
 Semantic and operation areas:
@@ -176,7 +179,7 @@ src/ops/ui_structure_ops.cpp           UI append/retain/copy structure ops
 CLI files:
 
 ```text
-src/cli/main.cpp             command parsing, dispatch, write policy, batch
+src/cli/main.cpp             command parsing, dispatch, write policy
 src/cli/json_formatters.cpp  CLI JSON result bodies
 ```
 
@@ -210,7 +213,8 @@ skills/gil-editing/
 
 The skill should prefer `opengil` over legacy JSON IR workflows. It should use
 ids rather than names for writes, run dry-runs for complex operations, validate
-after writes, and use batch for repeated edits.
+after writes, and apply repeated edits one operation at a time for now. Future
+bulk workflows should use the Python binding operation/document API.
 
 Unknown structures should still follow the research workflow: collect before and
 after samples, diff, identify minimal verified paths, then implement replay-first

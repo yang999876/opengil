@@ -12,7 +12,6 @@ endif()
 
 add_library(opengil_core
   src/core/gil.cpp
-  src/core/json_value.cpp
   src/core/sha256.cpp
   src/core/wire.cpp
   src/ops/attachment_from_decoration_ops.cpp
@@ -55,10 +54,6 @@ enable_testing()
 add_executable(opengil_core_tests tests/unit/test_core.cpp)
 target_link_libraries(opengil_core_tests PRIVATE opengil_core)
 add_test(NAME opengil_core_tests COMMAND opengil_core_tests)
-
-add_executable(opengil_json_tests tests/unit/test_json_value.cpp)
-target_link_libraries(opengil_json_tests PRIVATE opengil_core)
-add_test(NAME opengil_json_tests COMMAND opengil_json_tests)
 
 add_executable(opengil_model_tests tests/unit/test_model_ops.cpp)
 target_link_libraries(opengil_model_tests PRIVATE opengil_core)
@@ -162,24 +157,3 @@ add_test(NAME opengil_cli_create_prefab_duplicate_id_fails
     --dry-run
 )
 set_tests_properties(opengil_cli_create_prefab_duplicate_id_fails PROPERTIES WILL_FAIL TRUE)
-
-add_test(NAME opengil_cli_batch_dry_run
-  COMMAND opengil batch
-    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-model-rename.json
-    --dry-run
-)
-
-add_test(NAME opengil_cli_batch_custom_vars_dry_run
-  COMMAND opengil batch
-    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-custom-vars.json
-    --dry-run
-)
-
-add_test(NAME opengil_cli_batch_create_objects_dry_run
-  COMMAND opengil batch
-    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --ops ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/batch-create-objects.json
-    --dry-run
-)

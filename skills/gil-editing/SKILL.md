@@ -1,6 +1,6 @@
 ---
 name: gil-editing
-description: Use when working with Genshin/Miliastra `.gil` files, prefab records, scene or preview instances, category tabs, nodegraph references, decorations, attachment points, custom variables, model asset ids, projectile parameters, or UI primitives. Prefer the openGil `opengil` CLI for inspecting, validating, batching, and safely editing `.gil` files without full JSON IR round-trips.
+description: Use when working with Genshin/Miliastra `.gil` files, prefab records, scene or preview instances, category tabs, nodegraph references, decorations, attachment points, custom variables, model asset ids, projectile parameters, or UI primitives. Prefer the openGil `opengil` CLI for inspecting, validating, and safely editing `.gil` files without full JSON IR round-trips.
 ---
 
 # GIL Editing
@@ -13,7 +13,7 @@ Use `opengil` as the primary tool for `.gil` work.
 - Prefer numeric ids over names for writes.
 - Prefer `--tab-id` over `--tab` on Windows command lines when tab names contain non-ASCII text.
 - Use `--dry-run` before complex writes.
-- Use `batch` for repeated edits so the file is opened and written once.
+- For repeated edits, run each operation with `--dry-run` first, then write each accepted operation in sequence. Future bulk workflows should use the Python binding operation/document API.
 - Run structural `validate` after every write.
 - Do not treat structural `validate` as semantic proof; it does not check mirrored records, duplicate ids, tab mappings, or dangling references.
 - Do not dump full JSON IR unless explicitly debugging legacy behavior.
@@ -24,8 +24,8 @@ Use `opengil` as the primary tool for `.gil` work.
 ```powershell
 opengil inspect --input input.gil
 opengil validate --input input.gil
-opengil batch --input input.gil --output output.gil --ops ops.json --dry-run
-opengil batch --input input.gil --output output.gil --ops ops.json
+opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
+opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 --asset-id 20001220
 opengil validate --input output.gil
 ```
 

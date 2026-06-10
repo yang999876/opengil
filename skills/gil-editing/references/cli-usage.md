@@ -76,8 +76,6 @@ opengil set-preview-transform --input input.gil --object-id 1077936362 --pos-x 1
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
 opengil ui append-many --input input.gil --template template.gil --target-controller-entry-id 1073741855 --count 3 --dry-run
 opengil ui retain --input input.gil --controller-entry-id 1073741855 --primitive-indexes 0,2 --dry-run
-opengil batch --input input.gil --output output.gil --ops ops.json
-opengil batch --input input.gil --ops ops.json --dry-run
 ```
 
 Custom variable writes edit definitions only, not runtime values. Valid `--type`
@@ -121,123 +119,9 @@ default, pass that id through `--controller-entry-id` or
 target primitive body with the template primitive while preserving the target
 entry id and controller id.
 
-Batch `ops.json` may be either an array or an object with an `ops` array:
-
-```json
-{
-  "ops": [
-    {
-      "op": "set-model",
-      "prefabId": 1077936130,
-      "assetId": 20001220
-    },
-    {
-      "op": "rename-prefab",
-      "prefabId": 1077936130,
-      "name": "Renamed Prefab"
-    },
-    {
-      "op": "delete-prefab",
-      "prefabId": 1077936130
-    },
-    {
-      "op": "attach-nodegraph",
-      "prefabId": 1077936130,
-      "nodegraphId": 1073741913
-    },
-    {
-      "op": "set-projectile-motion",
-      "prefabId": 1077936385,
-      "angleDeg": 80,
-      "speed": 20,
-      "gravity": 20
-    },
-    {
-      "op": "set-empty-model",
-      "prefabId": 1077936130
-    },
-    {
-      "op": "set-scene-transform",
-      "objectId": 1086324737,
-      "posX": 7,
-      "posY": 8,
-      "posZ": 9,
-      "rotX": 10,
-      "rotY": 11,
-      "rotZ": 12,
-      "scaleX": 2,
-      "scaleY": 2,
-      "scaleZ": 2
-    },
-    {
-      "op": "create-prefab",
-      "assetId": 20001220,
-      "prefabId": 1077938002,
-      "posX": 7,
-      "posY": 8,
-      "posZ": 9,
-      "rotX": 10,
-      "rotY": 11,
-      "rotZ": 12,
-      "scaleX": 2,
-      "scaleY": 2,
-      "scaleZ": 2
-    },
-    {
-      "op": "create-scene-prefab-instance",
-      "prefabId": 1077938002,
-      "assetId": 20001220,
-      "objectId": 1077938003
-    },
-    {
-      "op": "decoration.add",
-      "prefabId": 1077936385,
-      "assetId": 20001220,
-      "name": "Deco",
-      "posY": 1.9,
-      "scaleX": 0.3,
-      "scaleY": 0.04,
-      "scaleZ": 0.3
-    },
-    {
-      "op": "attachment.add",
-      "prefabId": 1077936385,
-      "name": "Hand",
-      "displayName": "Hand Point",
-      "posX": 0.48,
-      "posY": 1.52,
-      "rotX": -37.9,
-      "rotY": 81.9
-    },
-    {
-      "op": "clone-prefab",
-      "sourcePrefabId": 1077936385,
-      "tabId": 6,
-      "newName": "Cloned Prefab"
-    },
-    {
-      "op": "copy-prefab-to-tab",
-      "sourcePrefabId": 1077936385,
-      "tabId": 6
-    },
-    {
-      "op": "custom-vars.add",
-      "prefabId": 1077936130,
-      "name": "openGilVar",
-      "type": "str"
-    },
-    {
-      "op": "custom-vars.copy-all",
-      "sourcePrefabId": 1077936130,
-      "targetPrefabId": 1077936131
-    },
-    {
-      "op": "custom-vars.sync-tab",
-      "sourcePrefabId": 1077936340,
-      "tabId": 6
-    }
-  ]
-}
-```
+For repeated edits, run each operation with `--dry-run` first, then write each
+accepted operation in sequence and validate after the final output. Future bulk
+workflows should use the Python binding operation/document API so one in-memory
+document can receive multiple operations before a final dry-run or write.
 
 Other planned write commands return `NOT_IMPLEMENTED` until their milestone lands.

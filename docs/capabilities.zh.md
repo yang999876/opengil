@@ -31,7 +31,6 @@ openGil 当前可以做这些事：
 - 添加 attachment point
 - 从 decoration 推导 attachment point
 - 查看和修改 UI primitive
-- 批量执行多个原子操作，只打开和写入一次 `.gil`
 - 为 agent 提供 skill 使用说明
 
 它现在适合：
@@ -391,45 +390,15 @@ opengil ui copy-transform-from-template --input input.gil --output output.gil --
 
 限制：`ui import-geometrize` 和 `ui import-pixel` 当前没有实现。
 
-## Batch 能力
+## 未来批处理方向
 
-多个操作可以放进一个 `ops.json`，一次调用：
+CLI 现在聚焦单次原子操作。未来需要批量修改时，优先方向不是恢复
+CLI 批处理入口，而是通过 Python `.pyd` / Python binding 暴露
+内存态 document API：一次读取 `.gil`，在同一个 document 上连续应用多个
+operation，最后统一 dry-run 或写出。
 
-```powershell
-opengil batch --input input.gil --output output.gil --ops ops.json
-opengil batch --input input.gil --ops ops.json --dry-run
-```
-
-batch 的价值是：
-
-- 只读取一次 `.gil`
-- 在内存里连续修改
-- 最后只写一次
-- 更适合 agent 批量编辑
-
-当前 batch 支持的 op：
-
-```text
-set-model
-set-empty-model
-rename-prefab
-delete-prefab
-attach-nodegraph
-set-projectile-motion
-custom-vars.add
-custom-vars.remove
-custom-vars.copy-all
-custom-vars.sync-tab
-clone-prefab
-copy-prefab-to-tab
-create-scene-object
-create-prefab
-create-scene-prefab-instance
-decoration.add
-attachment.add
-set-scene-transform
-set-preview-transform
-```
+这样可以保留当前 CLI JSON 兼容层的简单性，同时让 agent 和脚本在 Python
+层组合复杂流程。
 
 ## 安全和输出能力
 
@@ -492,7 +461,7 @@ skill 会指导 agent：
 - 优先调用 `opengil`
 - 不默认 dump 巨大 JSON IR
 - 复杂写操作先 dry-run
-- 批量修改优先用 batch
+- 多次修改暂时逐条 dry-run / 写入；未来使用 Python binding 的内存态 document API 批处理
 - 写后 validate
 - 未知结构走 before/after diff
 
@@ -522,5 +491,4 @@ openGil 现在是一个面向 agent 的 .gil 安全原子编辑器。
 - 对已验证结构提供稳定命令
 - 尽量局部修改
 - 保留未知字段
-- 给 agent 提供可靠、可组合、可批量执行的工具接口
-
+- 给 agent 提供可靠、可组合、可逐步验证的工具接口

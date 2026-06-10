@@ -29,7 +29,6 @@ For a plain-language overview of what this repository can do, see
 .\build\Release\opengil.exe list-prefabs --input .\tests\fixtures\test1.gil
 .\build\Release\opengil.exe get-model --input .\tests\fixtures\test1.gil --prefab-id 1086324737
 .\build\Release\opengil.exe set-model --input .\tests\fixtures\test1.gil --prefab-id 1086324737 --asset-id 20001220 --dry-run
-.\build\Release\opengil.exe batch --input .\tests\fixtures\test1.gil --ops .\tests\fixtures\batch-model-rename.json --dry-run
 ```
 
 All machine-facing command output is JSON on stdout. Logs and diagnostics go to

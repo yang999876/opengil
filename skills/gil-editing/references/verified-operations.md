@@ -21,5 +21,4 @@
   and rewrites the controller child id list. Patch operations update primitive
   type/color/name/layer/transform in place. Copy-transform-from-template keeps
   the target entry id and controller id, but uses the template primitive body.
-- Batch writes: apply supported atomic ops in memory and write once at the end.
 - Projectile motion: prefab-space component only; identify component kind `1 = 11` and display name `projectile motion`; set/insert velocity `21.1.12.1.1/2`, optionally set/insert gravity `21.1.12.2`.
