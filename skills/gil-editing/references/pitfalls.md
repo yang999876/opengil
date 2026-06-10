@@ -12,3 +12,6 @@
 - `attachment add` requires existing attachment wrapper/container branches in both prefab `top4` and matching scene `top8`; if they are missing, use a before/after sample instead of inventing the wrapper.
 - Transform writes are full-message replacements; pass all axes if you do not want defaults for omitted fields.
 - Some projectile `y = 0` fields are omitted and must be inserted when writing.
+- UI primitive files may list through the default controller but store primitives
+  under a different controller entry id. Read `ui list` first and pass the
+  primitive's `controllerEntryId` explicitly for structure edits.

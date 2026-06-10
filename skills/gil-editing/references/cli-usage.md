@@ -43,6 +43,17 @@ opengil custom-vars add --input input.gil --output output.gil --prefab-id 107793
 opengil custom-vars remove --input input.gil --output output.gil --prefab-id 1077936130 --name openGilVar
 opengil custom-vars copy-all --input input.gil --output output.gil --from-prefab-id 1077936130 --to-prefab-id 1077936131
 opengil custom-vars sync-tab --input input.gil --output output.gil --source-prefab-id 1077936340 --tab-id 6
+opengil ui list --input input.gil
+opengil ui list --input input.gil --controller-entry-id 1073741855
+opengil ui append --input input.gil --output output.gil --template template.gil --target-controller-entry-id 1073741855 --template-primitive-index 0
+opengil ui append-many --input input.gil --output output.gil --template template.gil --target-controller-entry-id 1073741855 --template-primitive-index 0 --count 3
+opengil ui retain --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-indexes 0,2,3
+opengil ui set-type --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --type-id 100001
+opengil ui set-color --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --color -65536
+opengil ui set-transform --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --pos-x 10 --pos-y 20 --width 80 --height 80 --scale-x 1 --scale-y 1 --scale-z 1 --rot-z 0
+opengil ui set-layer --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --layer 9
+opengil ui set-name --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --name ButtonA
+opengil ui copy-transform-from-template --input input.gil --output output.gil --template template.gil --controller-entry-id 1073741855 --primitive-index 0 --template-primitive-index 1
 opengil set-model --input input.gil --prefab-id 1077936130 --asset-id 20001220 --dry-run
 opengil rename-prefab --input input.gil --prefab-id 1077936130 --name "Renamed Prefab" --dry-run
 opengil delete-prefab --input input.gil --prefab-id 1077936130 --dry-run
@@ -57,6 +68,8 @@ opengil attachment add --input input.gil --prefab-id 1077936385 --name Hand --di
 opengil set-scene-transform --input input.gil --object-id 1086324737 --pos-x 7 --pos-y 8 --pos-z 9 --dry-run
 opengil set-preview-transform --input input.gil --object-id 1077936362 --pos-x 1 --pos-y 2 --pos-z 3 --dry-run
 opengil custom-vars sync-tab --input input.gil --source-prefab-id 1077936340 --tab-id 6 --dry-run
+opengil ui append-many --input input.gil --template template.gil --target-controller-entry-id 1073741855 --count 3 --dry-run
+opengil ui retain --input input.gil --controller-entry-id 1073741855 --primitive-indexes 0,2 --dry-run
 opengil batch --input input.gil --output output.gil --ops ops.json
 opengil batch --input input.gil --ops ops.json --dry-run
 ```
@@ -94,6 +107,13 @@ and updates decoration reference lists in `top4` and `top8`. Pass a stable
 `attachment add` writes custom attachment point definitions and indexes into
 prefab `top4` and matching `top8` scene entries. Use `--object-id` to target one
 scene entry; omit it to update all scene entries that reference the prefab.
+
+UI primitive commands edit `top9` entries and controller child id lists. Start
+with `ui list`; when the listed primitives use a controller entry other than the
+default, pass that id through `--controller-entry-id` or
+`--target-controller-entry-id`. `copy-transform-from-template` replaces the
+target primitive body with the template primitive while preserving the target
+entry id and controller id.
 
 Batch `ops.json` may be either an array or an object with an `ops` array:
 

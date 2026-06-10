@@ -14,5 +14,12 @@
 - Rename prefab: prefab `4.1.6.11.1` when present, with fallbacks for older observed name paths. This changes `top4` only.
 - Scene transform: replace full transform at `5.1.6.11`.
 - Preview transform: replace full transform at `8.1.6.11`.
+- UI primitives: list and edit `top9.field502` entries. Append/append-many clone
+  an observed primitive entry from a template file, patch entry/controller ids,
+  append the controller child id list, and insert the new entries before the
+  observed sentinel entry when present. Retain removes unkept primitive entries
+  and rewrites the controller child id list. Patch operations update primitive
+  type/color/name/layer/transform in place. Copy-transform-from-template keeps
+  the target entry id and controller id, but uses the template primitive body.
 - Batch writes: apply supported atomic ops in memory and write once at the end.
 - Projectile motion: prefab-space component only; identify component kind `1 = 11` and display name `projectile motion`; set/insert velocity `21.1.12.1.1/2`, optionally set/insert gravity `21.1.12.2`.
