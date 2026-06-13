@@ -77,6 +77,11 @@ std::string float_json(float value) {
   return out.str();
 }
 
+std::string optional_float_number_json(const std::optional<float>& value) {
+  if (!value) return "null";
+  return float_json(*value);
+}
+
 std::string sync_counts_to_json(const CustomVarsSyncCounts& counts) {
   std::ostringstream out;
   out << "{\"prefabCount\":" << counts.prefab_count
@@ -223,6 +228,37 @@ std::string model_info_to_json(const ModelInfo& info) {
       << ",\"sceneModelAssetIds\":" << uint64_array_json(info.scene_model_asset_ids)
       << ",\"previewModelAssetIds\":" << uint64_array_json(info.preview_model_asset_ids)
       << "}";
+  return out.str();
+}
+
+std::string scene_objects_to_json(const std::vector<SceneObjectInfo>& objects) {
+  std::ostringstream out;
+  out << "{\"count\":" << objects.size() << ",\"items\":[";
+  for (size_t i = 0; i < objects.size(); ++i) {
+    if (i) out << ",";
+    const auto& object = objects[i];
+    out << "{\"index\":" << object.index
+        << ",\"objectId\":" << object.object_id
+        << ",\"name\":" << json::quote(object.name)
+        << ",\"refId\":";
+    append_optional_number(out, object.ref_id);
+    out << ",\"prefabName\":" << json::quote(object.prefab_name)
+        << ",\"assetId\":";
+    append_optional_number(out, object.asset_id);
+    out << ",\"prefabModelAssetId\":";
+    append_optional_number(out, object.prefab_model_asset_id);
+    out << ",\"transform\":{\"position\":{\"x\":" << optional_float_number_json(object.transform.position_x)
+        << ",\"y\":" << optional_float_number_json(object.transform.position_y)
+        << ",\"z\":" << optional_float_number_json(object.transform.position_z)
+        << "},\"rotation\":{\"x\":" << optional_float_number_json(object.transform.rotation_x)
+        << ",\"y\":" << optional_float_number_json(object.transform.rotation_y)
+        << ",\"z\":" << optional_float_number_json(object.transform.rotation_z)
+        << "},\"scale\":{\"x\":" << optional_float_number_json(object.transform.scale_x)
+        << ",\"y\":" << optional_float_number_json(object.transform.scale_y)
+        << ",\"z\":" << optional_float_number_json(object.transform.scale_z)
+        << "}}}";
+  }
+  out << "]}";
   return out.str();
 }
 

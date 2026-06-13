@@ -132,6 +132,10 @@ add_test(NAME opengil_cli_ui_list_fixture
   COMMAND opengil ui list --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
 )
 
+add_test(NAME opengil_cli_list_scene_objects_fixture
+  COMMAND opengil list-scene-objects --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+
 add_test(NAME opengil_cli_ui_append_dry_run
   COMMAND opengil ui append
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil

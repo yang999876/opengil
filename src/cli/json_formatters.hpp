@@ -22,6 +22,7 @@ std::string tabs_to_json(const std::vector<TabInfo>& tabs);
 std::string prefabs_to_json(const std::vector<PrefabInfo>& prefabs);
 std::string prefab_tabs_to_json(const std::vector<TabInfo>& tabs);
 std::string model_info_to_json(const ModelInfo& info);
+std::string scene_objects_to_json(const std::vector<SceneObjectInfo>& objects);
 std::string nodegraphs_to_json(const std::vector<NodeGraphInfo>& graphs);
 
 std::string set_model_summary_to_json(const SetModelSummary& summary);

@@ -37,6 +37,7 @@ def main() -> int:
         "list_nodegraphs",
         "list_prefab_tabs",
         "list_prefabs",
+        "list_scene_objects",
         "list_tabs",
         "list_ui_primitives",
         "remove_custom_var",
@@ -67,6 +68,7 @@ def main() -> int:
     assert isinstance(doc.list_tabs(), list)
     assert isinstance(doc.list_prefabs(), list)
     assert isinstance(doc.list_nodegraphs(), list)
+    assert isinstance(doc.list_scene_objects(), list)
     assert isinstance(doc.list_custom_vars(), list)
     assert isinstance(doc.list_ui_primitives(), dict)
     assert doc.get_model(1086324737)["prefab_id"] == 1086324737

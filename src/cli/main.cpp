@@ -1173,6 +1173,8 @@ std::string handle_with_input(const Args& args) {
       throw CliError("PREFAB_NOT_FOUND", "prefab id not found", EXIT_SEMANTIC);
     }
     result = opengil::cli::model_info_to_json(*model);
+  } else if (args.command == "list-scene-objects") {
+    result = opengil::cli::scene_objects_to_json(opengil::list_scene_objects(file));
   } else if (args.command == "list-nodegraphs") {
     result = opengil::cli::nodegraphs_to_json(opengil::list_nodegraphs(file));
   } else {

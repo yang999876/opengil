@@ -413,6 +413,36 @@ py::dict model_info_to_dict(const opengil::ModelInfo& model) {
   return out;
 }
 
+py::dict scene_object_to_dict(const opengil::SceneObjectInfo& object) {
+  py::dict transform;
+  py::dict position;
+  position["x"] = optional_to_py(object.transform.position_x);
+  position["y"] = optional_to_py(object.transform.position_y);
+  position["z"] = optional_to_py(object.transform.position_z);
+  py::dict rotation;
+  rotation["x"] = optional_to_py(object.transform.rotation_x);
+  rotation["y"] = optional_to_py(object.transform.rotation_y);
+  rotation["z"] = optional_to_py(object.transform.rotation_z);
+  py::dict scale;
+  scale["x"] = optional_to_py(object.transform.scale_x);
+  scale["y"] = optional_to_py(object.transform.scale_y);
+  scale["z"] = optional_to_py(object.transform.scale_z);
+  transform["position"] = position;
+  transform["rotation"] = rotation;
+  transform["scale"] = scale;
+
+  py::dict out;
+  out["index"] = object.index;
+  out["object_id"] = object.object_id;
+  out["name"] = object.name;
+  out["ref_id"] = optional_to_py(object.ref_id);
+  out["prefab_name"] = object.prefab_name;
+  out["asset_id"] = optional_to_py(object.asset_id);
+  out["prefab_model_asset_id"] = optional_to_py(object.prefab_model_asset_id);
+  out["transform"] = transform;
+  return out;
+}
+
 py::dict nodegraph_info_to_dict(const opengil::NodeGraphInfo& graph) {
   py::dict out;
   out["path"] = graph.path;
@@ -526,6 +556,10 @@ class GilDocument {
 
   py::list list_nodegraphs() const {
     return vector_to_list(opengil::list_nodegraphs(file_), nodegraph_info_to_dict);
+  }
+
+  py::list list_scene_objects() const {
+    return vector_to_list(opengil::list_scene_objects(file_), scene_object_to_dict);
   }
 
   py::dict list_ui_primitives(uint64_t controller_entry_id) const {
@@ -854,6 +888,7 @@ PYBIND11_MODULE(opengil, m) {
       .def("list_prefab_tabs", &GilDocument::list_prefab_tabs, py::arg("prefab_id"))
       .def("get_model", &GilDocument::get_model, py::arg("prefab_id"))
       .def("list_nodegraphs", &GilDocument::list_nodegraphs)
+      .def("list_scene_objects", &GilDocument::list_scene_objects)
       .def(
           "list_ui_primitives",
           &GilDocument::list_ui_primitives,

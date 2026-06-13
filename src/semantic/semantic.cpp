@@ -42,6 +42,11 @@ std::optional<uint64_t> read_entry_id(std::span<const uint8_t> entry) {
   return read_varint_path(entry, path);
 }
 
+template <size_t N>
+std::optional<float> read_fixed32_path(std::span<const uint8_t> message, const std::array<uint32_t, N>& path) {
+  return read_fixed32_at_path(message, std::span<const uint32_t>(path.data(), path.size()));
+}
+
 std::vector<Field> safe_parse(std::span<const uint8_t> message) {
   std::vector<Field> fields;
   parse_fields(message, fields);
@@ -247,6 +252,67 @@ std::optional<ModelInfo> get_model_info(const GilFile& file, uint64_t prefab_id)
   }
 
   return info;
+}
+
+std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file) {
+  std::vector<SceneObjectInfo> objects;
+  const auto top5 = top_level_data(file, 5);
+  if (!top5) return objects;
+
+  std::map<uint64_t, PrefabInfo> prefab_by_id;
+  for (const auto& prefab : list_prefabs(file)) {
+    prefab_by_id[prefab.prefab_id] = prefab;
+  }
+
+  size_t index = 0;
+  for (const auto& entry_field : len_fields(*top5, 1)) {
+    const auto entry = field_data(*top5, entry_field);
+    const auto object_id = read_entry_id(entry);
+    if (!object_id) {
+      ++index;
+      continue;
+    }
+
+    SceneObjectInfo info;
+    info.index = index++;
+    info.object_id = *object_id;
+    info.name = read_scene_like_name(entry);
+
+    const std::array<uint32_t, 2> ref_path{2, 1};
+    info.ref_id = read_varint_path(entry, ref_path);
+    const std::array<uint32_t, 1> asset_path{8};
+    info.asset_id = read_varint_path(entry, asset_path);
+
+    if (info.ref_id) {
+      const auto prefab_it = prefab_by_id.find(*info.ref_id);
+      if (prefab_it != prefab_by_id.end()) {
+        info.prefab_name = prefab_it->second.name;
+        info.prefab_model_asset_id = prefab_it->second.model_asset_id;
+      }
+    }
+
+    const std::array<uint32_t, 4> pos_x{6, 11, 1, 1};
+    const std::array<uint32_t, 4> pos_y{6, 11, 1, 2};
+    const std::array<uint32_t, 4> pos_z{6, 11, 1, 3};
+    const std::array<uint32_t, 4> rot_x{6, 11, 2, 1};
+    const std::array<uint32_t, 4> rot_y{6, 11, 2, 2};
+    const std::array<uint32_t, 4> rot_z{6, 11, 2, 3};
+    const std::array<uint32_t, 4> scale_x{6, 11, 3, 1};
+    const std::array<uint32_t, 4> scale_y{6, 11, 3, 2};
+    const std::array<uint32_t, 4> scale_z{6, 11, 3, 3};
+    info.transform.position_x = read_fixed32_path(entry, pos_x);
+    info.transform.position_y = read_fixed32_path(entry, pos_y);
+    info.transform.position_z = read_fixed32_path(entry, pos_z);
+    info.transform.rotation_x = read_fixed32_path(entry, rot_x);
+    info.transform.rotation_y = read_fixed32_path(entry, rot_y);
+    info.transform.rotation_z = read_fixed32_path(entry, rot_z);
+    info.transform.scale_x = read_fixed32_path(entry, scale_x);
+    info.transform.scale_y = read_fixed32_path(entry, scale_y);
+    info.transform.scale_z = read_fixed32_path(entry, scale_z);
+    objects.push_back(std::move(info));
+  }
+
+  return objects;
 }
 
 std::vector<NodeGraphInfo> list_nodegraphs(const GilFile& file) {
