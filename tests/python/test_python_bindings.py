@@ -37,6 +37,7 @@ def main() -> int:
         "list_nodegraphs",
         "list_prefab_tabs",
         "list_prefabs",
+        "list_preview_objects",
         "list_scene_objects",
         "list_tabs",
         "list_ui_primitives",
@@ -68,6 +69,7 @@ def main() -> int:
     assert isinstance(doc.list_tabs(), list)
     assert isinstance(doc.list_prefabs(), list)
     assert isinstance(doc.list_nodegraphs(), list)
+    assert isinstance(doc.list_preview_objects(), list)
     assert isinstance(doc.list_scene_objects(), list)
     assert isinstance(doc.list_custom_vars(), list)
     assert isinstance(doc.list_ui_primitives(), dict)

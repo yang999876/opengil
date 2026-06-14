@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -69,6 +70,7 @@ std::vector<PrefabInfo> list_prefabs(const GilFile& file, const std::optional<st
 std::vector<TabInfo> list_prefab_tabs(const GilFile& file, uint64_t prefab_id);
 std::optional<ModelInfo> get_model_info(const GilFile& file, uint64_t prefab_id);
 std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file);
+std::vector<SceneObjectInfo> list_preview_objects(const GilFile& file);
 std::vector<NodeGraphInfo> list_nodegraphs(const GilFile& file);
 
 }  // namespace opengil

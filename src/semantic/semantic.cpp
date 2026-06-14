@@ -254,10 +254,10 @@ std::optional<ModelInfo> get_model_info(const GilFile& file, uint64_t prefab_id)
   return info;
 }
 
-std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file) {
+std::vector<SceneObjectInfo> list_space_objects(const GilFile& file, uint32_t top_field_number) {
   std::vector<SceneObjectInfo> objects;
-  const auto top5 = top_level_data(file, 5);
-  if (!top5) return objects;
+  const auto top = top_level_data(file, top_field_number);
+  if (!top) return objects;
 
   std::map<uint64_t, PrefabInfo> prefab_by_id;
   for (const auto& prefab : list_prefabs(file)) {
@@ -265,8 +265,8 @@ std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file) {
   }
 
   size_t index = 0;
-  for (const auto& entry_field : len_fields(*top5, 1)) {
-    const auto entry = field_data(*top5, entry_field);
+  for (const auto& entry_field : len_fields(*top, 1)) {
+    const auto entry = field_data(*top, entry_field);
     const auto object_id = read_entry_id(entry);
     if (!object_id) {
       ++index;
@@ -313,6 +313,14 @@ std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file) {
   }
 
   return objects;
+}
+
+std::vector<SceneObjectInfo> list_scene_objects(const GilFile& file) {
+  return list_space_objects(file, 5);
+}
+
+std::vector<SceneObjectInfo> list_preview_objects(const GilFile& file) {
+  return list_space_objects(file, 8);
 }
 
 std::vector<NodeGraphInfo> list_nodegraphs(const GilFile& file) {

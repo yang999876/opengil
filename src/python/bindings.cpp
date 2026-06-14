@@ -562,6 +562,10 @@ class GilDocument {
     return vector_to_list(opengil::list_scene_objects(file_), scene_object_to_dict);
   }
 
+  py::list list_preview_objects() const {
+    return vector_to_list(opengil::list_preview_objects(file_), scene_object_to_dict);
+  }
+
   py::dict list_ui_primitives(uint64_t controller_entry_id) const {
     return ui_list_to_dict(opengil::list_ui_primitives(file_, controller_entry_id));
   }
@@ -889,6 +893,7 @@ PYBIND11_MODULE(opengil, m) {
       .def("get_model", &GilDocument::get_model, py::arg("prefab_id"))
       .def("list_nodegraphs", &GilDocument::list_nodegraphs)
       .def("list_scene_objects", &GilDocument::list_scene_objects)
+      .def("list_preview_objects", &GilDocument::list_preview_objects)
       .def(
           "list_ui_primitives",
           &GilDocument::list_ui_primitives,
