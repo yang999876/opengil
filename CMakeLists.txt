@@ -64,6 +64,33 @@ else()
   target_compile_options(opengil_python PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(WIN32)
+  add_executable(opengil_gui WIN32
+    src/gui/main.cpp
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_demo.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp
+    third_party/imgui/backends/imgui_impl_dx11.cpp
+    third_party/imgui/backends/imgui_impl_win32.cpp
+  )
+  target_include_directories(opengil_gui PRIVATE
+    third_party/imgui
+    third_party/imgui/backends
+  )
+  target_link_libraries(opengil_gui PRIVATE
+    opengil_core
+    d3d11
+    dxgi
+    comdlg32
+    imm32
+  )
+  if(MSVC)
+    target_compile_options(opengil_gui PRIVATE /permissive-)
+  endif()
+endif()
+
 enable_testing()
 
 add_executable(opengil_core_tests tests/unit/test_core.cpp)

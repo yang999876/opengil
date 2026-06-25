@@ -13,7 +13,7 @@ Use `opengil` as the primary tool for `.gil` work.
 - Prefer numeric ids over names for writes.
 - Prefer `--tab-id` over `--tab` on Windows command lines when tab names contain non-ASCII text.
 - Use `--dry-run` before complex writes.
-- For repeated edits, run each operation with `--dry-run` first, then write each accepted operation in sequence. Future bulk workflows should use the Python binding operation/document API.
+- For repeated edits, run each operation with `--dry-run` first, then either write accepted CLI operations in sequence or use the Python binding `GilDocument` API.
 - Run structural `validate` after every write.
 - Do not treat structural `validate` as semantic proof; it does not check mirrored records, duplicate ids, tab mappings, or dangling references.
 - Do not dump full JSON IR unless explicitly debugging legacy behavior.
