@@ -121,4 +121,6 @@ rg '#include "opengil/json.hpp"' src/ops src/semantic
 - `validate` 不是完整语义校验。
 - `.proto` 文件只是文档/参考，不用于无损写回。
 - `ui import-geometrize` 当前不实现。
+- `pixel-art import-decoration` 当前沿用 `create_prefab` 的默认 tab/category 映射；
+  后续要支持显式 `--tab-id`，把生成的像素画 prefab 放入指定 tab。
 - `src/cli/main.cpp` 仍较大，后续要按真实职责拆，而不是拆薄转发层。
