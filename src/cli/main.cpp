@@ -742,20 +742,6 @@ std::string handle_ui(const Args& args) {
     command_name = "ui.set-name";
     result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
-  } else if (subcommand == "append") {
-    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
-    opengil::UiAppendOptions options;
-    options.template_primitive_index = optional_u64(args, "template-primitive-index")
-        ? require_size(args, "template-primitive-index")
-        : 0;
-    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
-        ? optional_u64(args, "target-controller-entry-id")
-        : optional_u64(args, "controller-entry-id");
-    options.entry_id = optional_u64(args, "entry-id");
-    const auto mutation = opengil::append_ui_primitive_from_template(file, template_file, options);
-    command_name = "ui.append";
-    result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
-    output_bytes = mutation.bytes;
   } else if (subcommand == "retain") {
     const auto primitive_indexes = parse_size_csv(require_value(args, "primitive-indexes"), "primitive-indexes");
     opengil::UiRetainOptions options;
@@ -764,20 +750,6 @@ std::string handle_ui(const Args& args) {
         : optional_u64(args, "controller-entry-id");
     const auto mutation = opengil::retain_ui_primitives(file, primitive_indexes, options);
     command_name = "ui.retain";
-    result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
-    output_bytes = mutation.bytes;
-  } else if (subcommand == "copy-transform-from-template") {
-    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
-    opengil::UiCopyTransformFromTemplateOptions options;
-    options.primitive_index = require_size(args, "primitive-index");
-    options.template_primitive_index = optional_u64(args, "template-primitive-index")
-        ? require_size(args, "template-primitive-index")
-        : 0;
-    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
-        ? optional_u64(args, "target-controller-entry-id")
-        : optional_u64(args, "controller-entry-id");
-    const auto mutation = opengil::copy_ui_primitive_transform_from_template(file, template_file, options);
-    command_name = "ui.copy-transform-from-template";
     result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
   } else {

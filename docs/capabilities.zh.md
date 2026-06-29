@@ -123,16 +123,15 @@ opengil attachment from-decoration --input input.gil --output output.gil --prefa
 ## UI Primitive
 
 ```powershell
-opengil ui append --input input.gil --output output.gil --template template.gil --target-controller-entry-id 1073741855 --template-primitive-index 0
 opengil ui retain --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-indexes 0,2,3
 opengil ui set-type --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --type-id 100001
 opengil ui set-color --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --color -65536
 opengil ui set-transform --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --pos-x 10 --pos-y 20 --width 80 --height 80 --scale-x 1 --scale-y 1 --scale-z 1 --rot-z 0
 opengil ui set-layer --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --layer 9
 opengil ui set-name --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --name ButtonA
-opengil ui copy-transform-from-template --input input.gil --output output.gil --template template.gil --controller-entry-id 1073741855 --primitive-index 0 --template-primitive-index 1
 ```
 
+UI primitive 新增走代码内置结构生成路线，不再从模板文件克隆 primitive。
 `ui import-geometrize` 和 `ui import-pixel` 当前不实现。
 
 ## Python Binding

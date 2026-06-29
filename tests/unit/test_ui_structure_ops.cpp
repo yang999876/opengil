@@ -150,14 +150,6 @@ opengil::GilFile target_file() {
   return make_file(top9);
 }
 
-opengil::GilFile template_file() {
-  const auto top9 = message({
-      len_field(502, controller_entry(opengil::kDefaultUiPrimitiveControllerEntryId, {9001})),
-      len_field(502, primitive_entry(9001, opengil::kDefaultUiPrimitiveControllerEntryId, "tpl", opengil::kUiPrimitiveTriangle, 90.0f, 91.0f)),
-  });
-  return make_file(top9);
-}
-
 std::vector<uint32_t> top_fields(const opengil::GilFile& file) {
   std::vector<uint32_t> fields;
   for (const auto& field : opengil::top_level_fields(file)) fields.push_back(field.number);
@@ -190,59 +182,23 @@ void check_only_top9_changed(const opengil::GilFile& before, const opengil::GilF
   OPENGIL_CHECK(std::equal(before10.begin(), before10.end(), after10.begin(), after10.end()));
 }
 
-bool throws_missing_template(const opengil::GilFile& file) {
-  try {
-    opengil::append_ui_primitive_from_template(file, make_file(message({})));
-  } catch (const std::runtime_error&) {
-    return true;
-  }
-  return false;
-}
-
 }  // namespace
 
 int main() {
   const auto target = target_file();
-  const auto templ = template_file();
 
-  const auto append = opengil::append_ui_primitive_from_template(target, templ);
-  const auto append_file = mutated_file(target, append);
-  auto list = opengil::list_ui_primitives(append_file);
-  OPENGIL_CHECK(opengil::validate_gil(append_file).ok);
-  OPENGIL_CHECK(list.primitives.size() == 3);
-  OPENGIL_CHECK(list.primitives[2].entry_id == 9001);
-  OPENGIL_CHECK(list.primitives[2].name == "tpl");
-  OPENGIL_CHECK(list.primitives[2].controller_entry_id == opengil::kDefaultUiPrimitiveControllerEntryId);
-  OPENGIL_CHECK(append.summary.kind == "appendUiPrimitive");
-  OPENGIL_CHECK(append.summary.primitive_count == 3);
-  OPENGIL_CHECK((append.summary.entry_ids == std::vector<uint64_t>{7001, 7002, 9001}));
-  OPENGIL_CHECK((append.summary.changed_top_fields == std::vector<uint32_t>{9}));
-  check_only_top9_changed(target, append_file);
-
-  const auto retained = opengil::retain_ui_primitives(append_file, {2, 0});
-  const auto retained_file = mutated_file(append_file, retained);
-  list = opengil::list_ui_primitives(retained_file);
+  const auto retained = opengil::retain_ui_primitives(target, {1, 0});
+  const auto retained_file = mutated_file(target, retained);
+  auto list = opengil::list_ui_primitives(retained_file);
   OPENGIL_CHECK(opengil::validate_gil(retained_file).ok);
   OPENGIL_CHECK(list.primitives.size() == 2);
-  OPENGIL_CHECK(list.primitives[0].entry_id == 9001);
+  OPENGIL_CHECK(list.primitives[0].entry_id == 7002);
   OPENGIL_CHECK(list.primitives[1].entry_id == 7001);
-  OPENGIL_CHECK((retained.summary.entry_ids == std::vector<uint64_t>{9001, 7001}));
-  check_only_top9_changed(append_file, retained_file);
-
-  const auto copied = opengil::copy_ui_primitive_transform_from_template(target, templ);
-  const auto copied_file = mutated_file(target, copied);
-  list = opengil::list_ui_primitives(copied_file);
-  OPENGIL_CHECK(opengil::validate_gil(copied_file).ok);
-  OPENGIL_CHECK(list.primitives.size() == 2);
-  OPENGIL_CHECK(list.primitives[0].entry_id == 7001);
-  OPENGIL_CHECK(list.primitives[0].name == "tpl");
-  OPENGIL_CHECK(list.primitives[0].primitive_type_id == opengil::kUiPrimitiveTriangle);
-  OPENGIL_CHECK(list.primitives[0].transform.position.x == 90.0);
-  OPENGIL_CHECK(list.primitives[0].controller_entry_id == opengil::kDefaultUiPrimitiveControllerEntryId);
-  OPENGIL_CHECK((copied.summary.entry_ids == std::vector<uint64_t>{7001}));
-  check_only_top9_changed(target, copied_file);
-
-  OPENGIL_CHECK(throws_missing_template(target));
+  OPENGIL_CHECK(retained.summary.kind == "retainUiPrimitives");
+  OPENGIL_CHECK(retained.summary.primitive_count == 2);
+  OPENGIL_CHECK((retained.summary.entry_ids == std::vector<uint64_t>{7002, 7001}));
+  OPENGIL_CHECK((retained.summary.changed_top_fields == std::vector<uint32_t>{9}));
+  check_only_top9_changed(target, retained_file);
 
   return 0;
 }

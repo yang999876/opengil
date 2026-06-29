@@ -800,36 +800,10 @@ class GilDocument {
     return apply(opengil::set_ui_primitive_name(file_, primitive_index, name, controller_entry_id), ui_patch_summary_to_dict);
   }
 
-  py::dict append_ui_primitive(
-      const std::filesystem::path& template_path,
-      size_t template_primitive_index,
-      const py::object& target_controller_entry_id,
-      const py::object& entry_id) {
-    const auto template_file = load_template_file(template_path);
-    opengil::UiAppendOptions options;
-    options.template_primitive_index = template_primitive_index;
-    options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
-    options.entry_id = optional_u64_from_py(entry_id);
-    return apply(opengil::append_ui_primitive_from_template(file_, template_file, options), ui_structure_summary_to_dict);
-  }
-
   py::dict retain_ui_primitives(const std::vector<size_t>& primitive_indexes, const py::object& target_controller_entry_id) {
     opengil::UiRetainOptions options;
     options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
     return apply(opengil::retain_ui_primitives(file_, primitive_indexes, options), ui_structure_summary_to_dict);
-  }
-
-  py::dict copy_ui_primitive_transform_from_template(
-      const std::filesystem::path& template_path,
-      size_t primitive_index,
-      size_t template_primitive_index,
-      const py::object& target_controller_entry_id) {
-    const auto template_file = load_template_file(template_path);
-    opengil::UiCopyTransformFromTemplateOptions options;
-    options.primitive_index = primitive_index;
-    options.template_primitive_index = template_primitive_index;
-    options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
-    return apply(opengil::copy_ui_primitive_transform_from_template(file_, template_file, options), ui_structure_summary_to_dict);
   }
 
  private:
@@ -1038,23 +1012,9 @@ PYBIND11_MODULE(opengil, m) {
           py::arg("name"),
           py::arg("controller_entry_id") = opengil::kDefaultUiPrimitiveControllerEntryId)
       .def(
-          "append_ui_primitive",
-          &GilDocument::append_ui_primitive,
-          py::arg("template_path"),
-          py::arg("template_primitive_index") = 0,
-          py::arg("target_controller_entry_id") = py::none(),
-          py::arg("entry_id") = py::none())
-      .def(
           "retain_ui_primitives",
           &GilDocument::retain_ui_primitives,
           py::arg("primitive_indexes"),
-          py::arg("target_controller_entry_id") = py::none())
-      .def(
-          "copy_ui_primitive_transform_from_template",
-          &GilDocument::copy_ui_primitive_transform_from_template,
-          py::arg("template_path"),
-          py::arg("primitive_index") = 0,
-          py::arg("template_primitive_index") = 0,
           py::arg("target_controller_entry_id") = py::none());
 
   m.def("open", &open_document, py::arg("path"));

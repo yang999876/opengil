@@ -172,30 +172,11 @@ add_test(NAME opengil_cli_list_preview_objects_fixture
   COMMAND opengil list-preview-objects --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
 )
 
-add_test(NAME opengil_cli_ui_append_dry_run
-  COMMAND opengil ui append
-    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --template ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --target-controller-entry-id 1073741855
-    --template-primitive-index 0
-    --dry-run
-)
-
 add_test(NAME opengil_cli_ui_retain_dry_run
   COMMAND opengil ui retain
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
     --controller-entry-id 1073741855
     --primitive-indexes 0,1
-    --dry-run
-)
-
-add_test(NAME opengil_cli_ui_copy_transform_from_template_dry_run
-  COMMAND opengil ui copy-transform-from-template
-    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --template ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
-    --controller-entry-id 1073741855
-    --primitive-index 0
-    --template-primitive-index 1
     --dry-run
 )
 
