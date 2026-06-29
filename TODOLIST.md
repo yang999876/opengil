@@ -1,9 +1,8 @@
-# TODO List
+# 待办
 
-## Pixel Art Decoration Import
+## 像素画 Decoration 导入
 
-- Add explicit tab selection for `pixel-art import-decoration`, preferably `--tab-id`, so generated pixel-art prefabs can be placed into a chosen prefab tab instead of relying on the current `create_prefab` default category mapping.
-- Replace the placeholder decoration `--asset-id` workflow once the real colorable block asset id is known.
-- Add decoration color writing after the game field path / component format for colorable blocks is confirmed.
-- Decide whether non-opaque PNG pixels should be skipped, treated as visible, or mapped to a future color/opacity field once decoration color behavior is known.
-
+- 为 `pixel-art import-decoration` 增加显式 tab 选择，优先支持 `--tab-id`，让生成的像素画 prefab 能进入指定 prefab tab，而不是依赖当前 `create_prefab` 的默认 category 映射。
+- 等真实的可着色方块 asset id 明确后，替换当前占位用的 decoration `--asset-id` 流程。
+- 等可着色方块的颜色字段路径 / 组件格式确认后，补上 decoration 颜色写入。
+- 等 decoration 颜色行为确认后，决定非不透明 PNG 像素应该跳过、按可见像素处理，还是映射到未来的颜色 / 透明度字段。
