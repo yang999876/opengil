@@ -9,6 +9,7 @@
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
 #include "opengil/object_ops.hpp"
+#include "opengil/pixel_decoration_import_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
@@ -42,5 +43,6 @@ std::string custom_vars_summary_to_json(const CustomVarsSummary& summary);
 std::string ui_primitive_list_to_json(const UiPrimitiveList& list);
 std::string ui_primitive_patch_summary_to_json(const UiPrimitivePatchSummary& summary);
 std::string ui_structure_summary_to_json(const UiStructureSummary& summary);
+std::string pixel_decoration_import_summary_to_json(const PixelDecorationImportSummary& summary);
 
 }  // namespace opengil::cli

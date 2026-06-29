@@ -493,4 +493,17 @@ std::string ui_structure_summary_to_json(const UiStructureSummary& summary) {
   return out.str();
 }
 
+std::string pixel_decoration_import_summary_to_json(const PixelDecorationImportSummary& summary) {
+  std::ostringstream out;
+  out << "{\"kind\":\"importPixelDecorationPrefab\""
+      << ",\"prefabId\":" << summary.prefab_id
+      << ",\"assetId\":" << summary.asset_id
+      << ",\"sourcePixelCount\":" << summary.source_pixel_count
+      << ",\"decorationCount\":" << summary.decoration_count
+      << ",\"prefabDecorationIds\":" << uint64_array_json(summary.prefab_decoration_ids)
+      << ",\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
+      << "}";
+  return out.str();
+}
+
 }  // namespace opengil::cli

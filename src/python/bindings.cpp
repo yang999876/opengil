@@ -19,6 +19,7 @@
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
 #include "opengil/object_ops.hpp"
+#include "opengil/pixel_decoration_import_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
@@ -500,6 +501,18 @@ std::vector<opengil::AttachmentPointSpec> attachment_specs_from_py(const py::obj
   return out;
 }
 
+py::dict pixel_decoration_import_summary_to_dict(const opengil::PixelDecorationImportSummary& summary) {
+  py::dict out;
+  out["kind"] = "importPixelDecorationPrefab";
+  out["prefab_id"] = summary.prefab_id;
+  out["asset_id"] = summary.asset_id;
+  out["source_pixel_count"] = summary.source_pixel_count;
+  out["decoration_count"] = summary.decoration_count;
+  out["prefab_decoration_ids"] = vector_to_list(summary.prefab_decoration_ids);
+  out["changed_top_fields"] = vector_to_list(summary.changed_top_fields);
+  return out;
+}
+
 opengil::GilFile load_template_file(const std::filesystem::path& path) {
   return opengil::load_gil_file(path);
 }
@@ -814,6 +827,20 @@ class GilDocument {
     return apply(opengil::import_pixel_png_as_ui_primitives(file_, png_path, options), ui_structure_summary_to_dict);
   }
 
+  py::dict import_pixel_png_as_decoration_prefab(
+      const std::filesystem::path& png_path,
+      uint64_t prefab_id,
+      uint64_t asset_id,
+      double pixel_size) {
+    opengil::PixelDecorationImportOptions options;
+    options.prefab_id = prefab_id;
+    options.asset_id = asset_id;
+    options.pixel_size = pixel_size;
+    return apply(
+        opengil::import_pixel_png_as_decoration_prefab(file_, png_path, options),
+        pixel_decoration_import_summary_to_dict);
+  }
+
  private:
   template <typename Mutation, typename Formatter>
   py::dict apply(const Mutation& mutation, Formatter formatter) {
@@ -1028,6 +1055,13 @@ PYBIND11_MODULE(opengil, m) {
           "import_pixel_png_as_ui_primitives",
           &GilDocument::import_pixel_png_as_ui_primitives,
           py::arg("png_path"),
+          py::arg("pixel_size"))
+      .def(
+          "import_pixel_png_as_decoration_prefab",
+          &GilDocument::import_pixel_png_as_decoration_prefab,
+          py::arg("png_path"),
+          py::arg("prefab_id"),
+          py::arg("asset_id"),
           py::arg("pixel_size"));
 
   m.def("open", &open_document, py::arg("path"));

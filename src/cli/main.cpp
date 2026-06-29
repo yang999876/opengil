@@ -21,6 +21,7 @@
 #include "opengil/model_ops.hpp"
 #include "opengil/nodegraph_ops.hpp"
 #include "opengil/object_ops.hpp"
+#include "opengil/pixel_decoration_import_ops.hpp"
 #include "opengil/prefab_ops.hpp"
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
@@ -785,6 +786,48 @@ std::string handle_ui(const Args& args) {
   return json;
 }
 
+std::string handle_pixel_art(const Args& args) {
+  if (args.positional.empty()) {
+    throw CliError("USAGE", "pixel-art requires a subcommand", EXIT_USAGE);
+  }
+  const std::string subcommand = args.positional[0];
+  if (subcommand != "import-decoration") {
+    throw CliError("USAGE", "unsupported pixel-art subcommand: " + subcommand, EXIT_USAGE);
+  }
+
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  opengil::PixelDecorationImportOptions options;
+  options.prefab_id = require_u64(args, "prefab-id");
+  options.asset_id = require_u64(args, "asset-id");
+  options.pixel_size = require_double(args, "pixel-size");
+
+  const auto mutation = opengil::import_pixel_png_as_decoration_prefab(
+      file,
+      std::filesystem::path(require_value(args, "png")),
+      options);
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_output_bytes(args, output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  auto result = opengil::cli::pixel_decoration_import_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result = append_json_bool_field(std::move(result), "dryRun", true);
+  }
+  const auto json = envelope("pixel-art.import-decoration", true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_attach_nodegraph(const Args& args, bool attach_all) {
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
@@ -1220,6 +1263,8 @@ int main(int argc, char** argv) {
       output = handle_attachment(args);
     } else if (args.command == "ui") {
       output = handle_ui(args);
+    } else if (args.command == "pixel-art") {
+      output = handle_pixel_art(args);
     } else {
       output = handle_with_input(args);
     }

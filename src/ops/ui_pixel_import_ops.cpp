@@ -1,99 +1,15 @@
 #include "opengil/ui_pixel_import_ops.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <fstream>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "opengil/ui_generated_ops.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "png_loader.hpp"
 
 namespace opengil {
 namespace {
-
-struct StbiImage {
-  int width = 0;
-  int height = 0;
-  int channels = 0;
-  stbi_uc* pixels = nullptr;
-
-  StbiImage() = default;
-
-  ~StbiImage() {
-    stbi_image_free(pixels);
-  }
-
-  StbiImage(const StbiImage&) = delete;
-  StbiImage& operator=(const StbiImage&) = delete;
-
-  StbiImage(StbiImage&& other) noexcept
-      : width(other.width), height(other.height), channels(other.channels), pixels(other.pixels) {
-    other.pixels = nullptr;
-  }
-
-  StbiImage& operator=(StbiImage&& other) noexcept {
-    if (this == &other) return *this;
-    stbi_image_free(pixels);
-    width = other.width;
-    height = other.height;
-    channels = other.channels;
-    pixels = other.pixels;
-    other.pixels = nullptr;
-    return *this;
-  }
-};
-
-std::vector<uint8_t> read_binary_file(const std::filesystem::path& path) {
-  std::ifstream stream(path, std::ios::binary | std::ios::ate);
-  if (!stream) throw std::runtime_error("failed to open PNG file");
-  const auto size = stream.tellg();
-  if (size < 0) throw std::runtime_error("failed to read PNG file size");
-
-  std::vector<uint8_t> bytes(static_cast<size_t>(size));
-  stream.seekg(0);
-  if (!bytes.empty()) {
-    stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-  }
-  if (!stream) throw std::runtime_error("failed to read PNG file");
-  return bytes;
-}
-
-std::string lower_extension(const std::filesystem::path& path) {
-  auto ext = path.extension().string();
-  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
-    return static_cast<char>(std::tolower(ch));
-  });
-  return ext;
-}
-
-bool has_png_signature(std::span<const uint8_t> bytes) {
-  constexpr uint8_t kPngSignature[] = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
-  return bytes.size() >= std::size(kPngSignature) &&
-         std::equal(std::begin(kPngSignature), std::end(kPngSignature), bytes.begin());
-}
-
-StbiImage load_png_rgba(const std::filesystem::path& png_path) {
-  if (lower_extension(png_path) != ".png") throw std::runtime_error("pixel import only accepts .png files");
-  auto bytes = read_binary_file(png_path);
-  if (!has_png_signature(bytes)) throw std::runtime_error("pixel import input is not a PNG file");
-
-  StbiImage image;
-  image.pixels = stbi_load_from_memory(
-      bytes.data(),
-      static_cast<int>(bytes.size()),
-      &image.width,
-      &image.height,
-      &image.channels,
-      4);
-  if (!image.pixels) throw std::runtime_error("failed to decode PNG file");
-  if (image.width <= 0 || image.height <= 0) throw std::runtime_error("PNG dimensions must be positive");
-  return image;
-}
 
 int64_t argb_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
   const uint32_t raw = (static_cast<uint32_t>(a) << 24) |
@@ -103,7 +19,7 @@ int64_t argb_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
   return static_cast<int64_t>(static_cast<int32_t>(raw));
 }
 
-std::vector<UiGeneratedPrimitiveSpec> specs_from_image(const StbiImage& image, double pixel_size) {
+std::vector<UiGeneratedPrimitiveSpec> specs_from_image(const PngRgbaImage& image, double pixel_size) {
   const size_t width = static_cast<size_t>(image.width);
   const size_t height = static_cast<size_t>(image.height);
   const size_t pixel_count = width * height;
@@ -143,7 +59,7 @@ UiStructureMutation import_pixel_png_as_ui_primitives(
     const UiPixelImportOptions& options) {
   if (options.pixel_size <= 0.0) throw std::runtime_error("pixel-size must be positive");
 
-  const auto image = load_png_rgba(png_path);
+  const auto image = load_png_rgba_file(png_path, "pixel import");
   auto specs = specs_from_image(image, options.pixel_size);
   if (specs.empty()) {
     const auto list = list_ui_primitives(file, options.target_controller_entry_id);

@@ -21,6 +21,8 @@ add_library(opengil_core
   src/ops/model_ops.cpp
   src/ops/nodegraph_ops.cpp
   src/ops/object_ops.cpp
+  src/ops/pixel_decoration_import_ops.cpp
+  src/ops/png_loader.cpp
   src/ops/prefab_ops.cpp
   src/ops/projectile_ops.cpp
   src/ops/ui_generated_ops.cpp
@@ -141,6 +143,13 @@ add_executable(opengil_ui_pixel_import_tests tests/unit/test_ui_pixel_import_ops
 target_link_libraries(opengil_ui_pixel_import_tests PRIVATE opengil_core)
 add_test(NAME opengil_ui_pixel_import_tests COMMAND opengil_ui_pixel_import_tests)
 
+add_executable(opengil_pixel_decoration_import_tests tests/unit/test_pixel_decoration_import_ops.cpp)
+target_link_libraries(opengil_pixel_decoration_import_tests PRIVATE opengil_core)
+target_compile_definitions(opengil_pixel_decoration_import_tests PRIVATE
+  OPENGIL_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+add_test(NAME opengil_pixel_decoration_import_tests COMMAND opengil_pixel_decoration_import_tests)
+
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
 add_test(NAME opengil_object_tests COMMAND opengil_object_tests)
@@ -190,6 +199,16 @@ add_test(NAME opengil_cli_ui_import_pixel_dry_run
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
     --png ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pixel-2x2.png
     --pixel-size 8
+    --dry-run
+)
+
+add_test(NAME opengil_cli_pixel_art_import_decoration_dry_run
+  COMMAND opengil pixel-art import-decoration
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --png ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pixel-2x2.png
+    --prefab-id 1077939001
+    --asset-id 20001220
+    --pixel-size 0.25
     --dry-run
 )
 

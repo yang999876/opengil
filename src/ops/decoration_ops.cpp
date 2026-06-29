@@ -129,6 +129,32 @@ std::vector<uint8_t> set_packed_varint_list_at_path(
   return rebuild_message(fields);
 }
 
+std::vector<uint8_t> set_prefab_decoration_refs(
+    std::span<const uint8_t> prefab_entry,
+    const std::vector<uint64_t>& values) {
+  auto fields = parse_owned_fields_or_throw(prefab_entry, "prefab decoration refs entry");
+  const auto encoded = encode_packed_varints(values);
+
+  for (auto& field : fields) {
+    if (field.number != 6 || field.wire != 2) continue;
+    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab decoration refs block");
+    for (auto& child : child_fields) {
+      if (child.number != 50 || child.wire != 2) continue;
+      child.data = encoded;
+      field.data = rebuild_message(child_fields);
+      return rebuild_message(fields);
+    }
+    child_fields.push_back(make_len_field(50, encoded));
+    field.data = rebuild_message(child_fields);
+    return rebuild_message(fields);
+  }
+
+  fields.push_back(make_len_field(6, rebuild_message({
+      make_len_field(50, encoded),
+  })));
+  return rebuild_message(fields);
+}
+
 std::vector<uint8_t> encode_vec3_sparse(const Vec3& value) {
   std::vector<OwnedField> fields;
   if (value.x != 0.0) fields.push_back(make_fixed32_field(1, static_cast<float>(value.x)));
@@ -243,19 +269,30 @@ std::vector<std::vector<uint8_t>> find_scene_entries(std::span<const uint8_t> to
   return entries;
 }
 
-uint64_t max_top_level_entry_id(std::span<const uint8_t> message) {
-  uint64_t max_id = 0;
-  bool saw = false;
+void merge_max_entry_id(
+    std::optional<uint64_t>& max_id,
+    std::span<const uint8_t> message,
+    uint32_t repeated_field) {
   const std::array<uint32_t, 1> id_path{1};
   for (const auto& field : parse_owned_fields_or_throw(message, "decoration top-level id scan")) {
+    if (field.number != repeated_field) continue;
     if (field.wire != 2) continue;
     const auto id = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), id_path);
     if (!id) continue;
-    max_id = std::max(max_id, *id);
-    saw = true;
+    max_id = max_id ? std::max(*max_id, *id) : *id;
   }
-  if (!saw) throw std::runtime_error("failed to find max top-level entry id");
-  return max_id;
+}
+
+uint64_t next_decoration_entry_id(const GilFile& file) {
+  std::optional<uint64_t> max_id;
+  for (uint32_t top_field : {4u, 5u, 8u}) {
+    if (const auto top = top_level_data(file, top_field)) merge_max_entry_id(max_id, *top, 1);
+  }
+  if (const auto top27 = top_level_data(file, 27)) {
+    merge_max_entry_id(max_id, *top27, 1);
+    merge_max_entry_id(max_id, *top27, 2);
+  }
+  return max_id.value_or(0) + 1;
 }
 
 std::vector<uint8_t> replace_repeated_entry(
@@ -310,20 +347,20 @@ std::vector<uint8_t> insert_decoration_entries(
     for (auto it = fields.begin(); it != fields.end(); ++it) {
       if (it->number == 1) last = it;
     }
-    if (last == fields.end()) throw std::runtime_error("top-level field 27 has no field1 entries");
     std::vector<OwnedField> inserts;
     for (const auto& entry : new_field1_entries) inserts.push_back(make_len_field(1, entry));
-    fields.insert(last + 1, inserts.begin(), inserts.end());
+    if (last == fields.end()) fields.insert(fields.end(), inserts.begin(), inserts.end());
+    else fields.insert(last + 1, inserts.begin(), inserts.end());
   }
   if (!new_field2_entries.empty()) {
     auto last = fields.end();
     for (auto it = fields.begin(); it != fields.end(); ++it) {
       if (it->number == 2) last = it;
     }
-    if (last == fields.end()) throw std::runtime_error("top-level field 27 has no field2 entries");
     std::vector<OwnedField> inserts;
     for (const auto& entry : new_field2_entries) inserts.push_back(make_len_field(2, entry));
-    fields.insert(last + 1, inserts.begin(), inserts.end());
+    if (last == fields.end()) fields.insert(fields.end(), inserts.begin(), inserts.end());
+    else fields.insert(last + 1, inserts.begin(), inserts.end());
   }
   return rebuild_message(fields);
 }
@@ -355,7 +392,7 @@ DecorationMutation add_prefab_decorations(
     scene_entries = find_scene_entries(*top8, prefab_id);
   }
 
-  uint64_t next_top27_id = max_top_level_entry_id(*top27) + 1;
+  uint64_t next_top27_id = next_decoration_entry_id(file);
   std::vector<std::vector<uint8_t>> new_field1_entries;
   std::vector<std::vector<uint8_t>> new_field2_entries;
   std::map<uint64_t, std::vector<uint64_t>> scene_decoration_ids_by_object;
@@ -386,14 +423,10 @@ DecorationMutation add_prefab_decorations(
 
   const std::array<uint32_t, 2> prefab_packed_path{6, 50};
   const auto prefab_packed_bytes = read_bytes_at_path(prefab_entry, std::span<const uint32_t>(prefab_packed_path.data(), prefab_packed_path.size()));
-  if (!prefab_packed_bytes) throw std::runtime_error("prefab decoration reference list not found");
-  auto prefab_packed = decode_packed_varints(*prefab_packed_bytes);
+  auto prefab_packed = prefab_packed_bytes ? decode_packed_varints(*prefab_packed_bytes) : std::vector<uint64_t>{0, 0};
   prefab_packed.insert(prefab_packed.end(), summary.prefab_decoration_ids.begin(), summary.prefab_decoration_ids.end());
   update_reference_count_slot(prefab_packed);
-  prefab_entry = set_packed_varint_list_at_path(
-      prefab_entry,
-      std::span<const uint32_t>(prefab_packed_path.data(), prefab_packed_path.size()),
-      prefab_packed);
+  prefab_entry = set_prefab_decoration_refs(prefab_entry, prefab_packed);
 
   std::vector<uint8_t> next_payload(payload(file).begin(), payload(file).end());
   const auto next_top4 = replace_repeated_entry(

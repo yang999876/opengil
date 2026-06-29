@@ -115,10 +115,13 @@ opengil custom-vars sync-tab --input input.gil --output output.gil --source-pref
 opengil decoration add --input input.gil --output output.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --pos-y 1.9 --scale-x 0.3 --scale-y 0.04 --scale-z 0.3
 opengil attachment add --input input.gil --output output.gil --prefab-id 1077936385 --name Hand --display-name "Hand Point" --pos-x 0.48 --pos-y 1.52 --rot-x -37.9 --rot-y 81.9
 opengil attachment from-decoration --input input.gil --output output.gil --prefab-id 1077936385
+opengil pixel-art import-decoration --input input.gil --output output.gil --png pixel.png --prefab-id 1077939001 --asset-id 20001220 --pixel-size 0.25
 ```
 
 `attachment add` 可选传 `--object-id` 只更新一个 scene entry；不传则更新
 所有引用该 prefab 的 scene entry。
+`pixel-art import-decoration` 会创建空模型 prefab，并把 PNG 非透明像素导入为 decoration；
+当前 `--asset-id` 是占位方块资源，暂不写像素颜色。
 
 ## UI Primitive
 
