@@ -123,7 +123,7 @@ opengil attachment from-decoration --input input.gil --output output.gil --prefa
 ## UI Primitive
 
 ```powershell
-opengil ui retain --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-indexes 0,2,3
+opengil ui delete --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-indexes 0,2,3
 opengil ui set-type --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --type-id 100001
 opengil ui set-color --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --color -65536
 opengil ui set-transform --input input.gil --output output.gil --controller-entry-id 1073741855 --primitive-index 0 --pos-x 10 --pos-y 20 --width 80 --height 80 --scale-x 1 --scale-y 1 --scale-z 1 --rot-z 0

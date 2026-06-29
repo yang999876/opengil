@@ -187,18 +187,17 @@ void check_only_top9_changed(const opengil::GilFile& before, const opengil::GilF
 int main() {
   const auto target = target_file();
 
-  const auto retained = opengil::retain_ui_primitives(target, {1, 0});
-  const auto retained_file = mutated_file(target, retained);
-  auto list = opengil::list_ui_primitives(retained_file);
-  OPENGIL_CHECK(opengil::validate_gil(retained_file).ok);
-  OPENGIL_CHECK(list.primitives.size() == 2);
+  const auto deleted = opengil::delete_ui_primitives(target, {0});
+  const auto deleted_file = mutated_file(target, deleted);
+  auto list = opengil::list_ui_primitives(deleted_file);
+  OPENGIL_CHECK(opengil::validate_gil(deleted_file).ok);
+  OPENGIL_CHECK(list.primitives.size() == 1);
   OPENGIL_CHECK(list.primitives[0].entry_id == 7002);
-  OPENGIL_CHECK(list.primitives[1].entry_id == 7001);
-  OPENGIL_CHECK(retained.summary.kind == "retainUiPrimitives");
-  OPENGIL_CHECK(retained.summary.primitive_count == 2);
-  OPENGIL_CHECK((retained.summary.entry_ids == std::vector<uint64_t>{7002, 7001}));
-  OPENGIL_CHECK((retained.summary.changed_top_fields == std::vector<uint32_t>{9}));
-  check_only_top9_changed(target, retained_file);
+  OPENGIL_CHECK(deleted.summary.kind == "deleteUiPrimitives");
+  OPENGIL_CHECK(deleted.summary.primitive_count == 1);
+  OPENGIL_CHECK((deleted.summary.entry_ids == std::vector<uint64_t>{7002}));
+  OPENGIL_CHECK((deleted.summary.changed_top_fields == std::vector<uint32_t>{9}));
+  check_only_top9_changed(target, deleted_file);
 
   return 0;
 }

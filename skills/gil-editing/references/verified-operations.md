@@ -16,7 +16,7 @@
 - Preview transform: replace full transform at `8.1.6.11`.
 - UI primitives: list and edit `top9.field502` entries. Generated append builds
   primitive entries from code-owned structure and patches type/color/name/layer/
-  transform at creation time. Retain removes unkept primitive entries and
+  transform at creation time. Delete removes selected primitive entries and
   rewrites the controller child id list. Patch operations update primitive
   type/color/name/layer/transform in place.
 - Projectile motion: prefab-space component only; identify component kind `1 = 11` and display name `projectile motion`; set/insert velocity `21.1.12.1.1/2`, optionally set/insert gravity `21.1.12.2`.

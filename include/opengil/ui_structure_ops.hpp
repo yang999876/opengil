@@ -25,13 +25,13 @@ struct UiStructureMutation {
   UiStructureSummary summary;
 };
 
-struct UiRetainOptions {
+struct UiDeleteOptions {
   std::optional<uint64_t> target_controller_entry_id;
 };
 
-UiStructureMutation retain_ui_primitives(
+UiStructureMutation delete_ui_primitives(
     const GilFile& file,
     const std::vector<size_t>& primitive_indexes,
-    const UiRetainOptions& options = {});
+    const UiDeleteOptions& options = {});
 
 }  // namespace opengil

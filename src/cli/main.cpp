@@ -742,14 +742,14 @@ std::string handle_ui(const Args& args) {
     command_name = "ui.set-name";
     result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
-  } else if (subcommand == "retain") {
+  } else if (subcommand == "delete") {
     const auto primitive_indexes = parse_size_csv(require_value(args, "primitive-indexes"), "primitive-indexes");
-    opengil::UiRetainOptions options;
+    opengil::UiDeleteOptions options;
     options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
         ? optional_u64(args, "target-controller-entry-id")
         : optional_u64(args, "controller-entry-id");
-    const auto mutation = opengil::retain_ui_primitives(file, primitive_indexes, options);
-    command_name = "ui.retain";
+    const auto mutation = opengil::delete_ui_primitives(file, primitive_indexes, options);
+    command_name = "ui.delete";
     result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
   } else {

@@ -800,10 +800,10 @@ class GilDocument {
     return apply(opengil::set_ui_primitive_name(file_, primitive_index, name, controller_entry_id), ui_patch_summary_to_dict);
   }
 
-  py::dict retain_ui_primitives(const std::vector<size_t>& primitive_indexes, const py::object& target_controller_entry_id) {
-    opengil::UiRetainOptions options;
+  py::dict delete_ui_primitives(const std::vector<size_t>& primitive_indexes, const py::object& target_controller_entry_id) {
+    opengil::UiDeleteOptions options;
     options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
-    return apply(opengil::retain_ui_primitives(file_, primitive_indexes, options), ui_structure_summary_to_dict);
+    return apply(opengil::delete_ui_primitives(file_, primitive_indexes, options), ui_structure_summary_to_dict);
   }
 
  private:
@@ -1012,8 +1012,8 @@ PYBIND11_MODULE(opengil, m) {
           py::arg("name"),
           py::arg("controller_entry_id") = opengil::kDefaultUiPrimitiveControllerEntryId)
       .def(
-          "retain_ui_primitives",
-          &GilDocument::retain_ui_primitives,
+          "delete_ui_primitives",
+          &GilDocument::delete_ui_primitives,
           py::arg("primitive_indexes"),
           py::arg("target_controller_entry_id") = py::none());
 

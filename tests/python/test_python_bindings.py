@@ -40,7 +40,7 @@ def main() -> int:
         "list_ui_primitives",
         "remove_custom_var",
         "rename_prefab",
-        "retain_ui_primitives",
+        "delete_ui_primitives",
         "save",
         "set_asset_id",
         "set_empty_model",

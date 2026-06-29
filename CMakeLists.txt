@@ -172,11 +172,11 @@ add_test(NAME opengil_cli_list_preview_objects_fixture
   COMMAND opengil list-preview-objects --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
 )
 
-add_test(NAME opengil_cli_ui_retain_dry_run
-  COMMAND opengil ui retain
+add_test(NAME opengil_cli_ui_delete_dry_run
+  COMMAND opengil ui delete
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
     --controller-entry-id 1073741855
-    --primitive-indexes 0,1
+    --primitive-indexes 0
     --dry-run
 )
 

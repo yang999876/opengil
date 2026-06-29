@@ -177,37 +177,37 @@ std::vector<uint8_t> set_direct_len_field(std::span<const uint8_t> message, uint
   return rebuild_message(fields);
 }
 
-std::vector<uint8_t> remove_unretained_primitives(
+std::vector<uint8_t> remove_deleted_primitives(
     std::span<const uint8_t> top9,
     uint64_t controller_entry_id,
-    const std::vector<uint64_t>& keep_entry_ids) {
+    const std::vector<uint64_t>& remaining_entry_ids) {
   const auto primitives = primitive_entries(top9);
   std::unordered_set<uint64_t> primitive_ids;
   for (const auto& primitive : primitives) primitive_ids.insert(primitive.entry_id);
 
-  std::unordered_set<uint64_t> keep_ids(keep_entry_ids.begin(), keep_entry_ids.end());
+  std::unordered_set<uint64_t> remaining_ids(remaining_entry_ids.begin(), remaining_entry_ids.end());
   auto fields = parse_owned_fields_or_throw(top9, "top-level field 9");
-  std::vector<OwnedField> retained;
-  retained.reserve(fields.size());
+  std::vector<OwnedField> kept_fields;
+  kept_fields.reserve(fields.size());
 
   for (auto& field : fields) {
     if (field.number != 502 || field.wire != 2) {
-      retained.push_back(std::move(field));
+      kept_fields.push_back(std::move(field));
       continue;
     }
 
     const auto entry_id = entry_id_from_top9_entry(bytes_span(field.data));
     if (entry_id && *entry_id == controller_entry_id) {
-      field.data = set_direct_len_field(bytes_span(field.data), 503, encode_packed_varints(keep_entry_ids));
-      retained.push_back(std::move(field));
+      field.data = set_direct_len_field(bytes_span(field.data), 503, encode_packed_varints(remaining_entry_ids));
+      kept_fields.push_back(std::move(field));
       continue;
     }
 
-    if (entry_id && primitive_ids.contains(*entry_id) && !keep_ids.contains(*entry_id)) continue;
-    retained.push_back(std::move(field));
+    if (entry_id && primitive_ids.contains(*entry_id) && !remaining_ids.contains(*entry_id)) continue;
+    kept_fields.push_back(std::move(field));
   }
 
-  return rebuild_message(retained);
+  return rebuild_message(kept_fields);
 }
 
 GilFile file_from_bytes(const GilFile& base, const std::vector<uint8_t>& bytes) {
@@ -254,26 +254,32 @@ UiStructureSummary summary_for_result(
 
 }  // namespace
 
-UiStructureMutation retain_ui_primitives(
+UiStructureMutation delete_ui_primitives(
     const GilFile& file,
     const std::vector<size_t>& primitive_indexes,
-    const UiRetainOptions& options) {
+    const UiDeleteOptions& options) {
   const auto top9 = top_level_data(file, 9);
   if (!top9) throw std::runtime_error("top-level field 9 not found");
 
   const uint64_t controller_id = options.target_controller_entry_id.value_or(kDefaultUiPrimitiveControllerEntryId);
   const auto ordered = ordered_primitives(*top9, controller_id);
-  std::vector<uint64_t> keep_entry_ids;
-  keep_entry_ids.reserve(primitive_indexes.size());
+
+  std::unordered_set<size_t> delete_indexes;
   for (size_t index : primitive_indexes) {
     if (index >= ordered.size()) throw std::runtime_error("ui primitive not found");
-    keep_entry_ids.push_back(ordered[index].entry_id);
+    delete_indexes.insert(index);
   }
 
-  const auto next_top9 = remove_unretained_primitives(*top9, controller_id, keep_entry_ids);
+  std::vector<uint64_t> remaining_entry_ids;
+  remaining_entry_ids.reserve(ordered.size() - delete_indexes.size());
+  for (size_t index = 0; index < ordered.size(); ++index) {
+    if (!delete_indexes.contains(index)) remaining_entry_ids.push_back(ordered[index].entry_id);
+  }
+
+  const auto next_top9 = remove_deleted_primitives(*top9, controller_id, remaining_entry_ids);
   auto next_payload = replace_top_level_field_data(payload(file), 9, next_top9);
   auto result_file = file_from_bytes(file, build_gil_bytes(file.header, next_payload));
-  auto summary = summary_for_result("retainUiPrimitives", result_file, controller_id);
+  auto summary = summary_for_result("deleteUiPrimitives", result_file, controller_id);
   return make_mutation(file, std::move(next_payload), std::move(summary));
 }
 
