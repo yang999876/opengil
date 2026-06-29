@@ -26,11 +26,12 @@ add_library(opengil_core
   src/ops/ui_generated_ops.cpp
   src/ops/ui_ops.cpp
   src/ops/ui_patch_ops.cpp
+  src/ops/ui_pixel_import_ops.cpp
   src/ops/ui_structure_ops.cpp
   src/semantic/semantic.cpp
 )
 
-target_include_directories(opengil_core PUBLIC include)
+target_include_directories(opengil_core PUBLIC include PRIVATE third_party/stb)
 
 if(MSVC)
   target_compile_options(opengil_core PRIVATE /W4 /permissive-)
@@ -136,6 +137,10 @@ add_executable(opengil_ui_generated_tests tests/unit/test_ui_generated_ops.cpp)
 target_link_libraries(opengil_ui_generated_tests PRIVATE opengil_core)
 add_test(NAME opengil_ui_generated_tests COMMAND opengil_ui_generated_tests)
 
+add_executable(opengil_ui_pixel_import_tests tests/unit/test_ui_pixel_import_ops.cpp)
+target_link_libraries(opengil_ui_pixel_import_tests PRIVATE opengil_core)
+add_test(NAME opengil_ui_pixel_import_tests COMMAND opengil_ui_pixel_import_tests)
+
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
 add_test(NAME opengil_object_tests COMMAND opengil_object_tests)
@@ -177,6 +182,14 @@ add_test(NAME opengil_cli_ui_delete_dry_run
     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
     --controller-entry-id 1073741855
     --primitive-indexes 0
+    --dry-run
+)
+
+add_test(NAME opengil_cli_ui_import_pixel_dry_run
+  COMMAND opengil ui import-pixel
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --png ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/pixel-2x2.png
+    --pixel-size 8
     --dry-run
 )
 

@@ -26,6 +26,7 @@
 #include "opengil/semantic.hpp"
 #include "opengil/ui_ops.hpp"
 #include "opengil/ui_patch_ops.hpp"
+#include "opengil/ui_pixel_import_ops.hpp"
 #include "opengil/ui_structure_ops.hpp"
 #include "opengil/version.hpp"
 
@@ -750,6 +751,17 @@ std::string handle_ui(const Args& args) {
         : optional_u64(args, "controller-entry-id");
     const auto mutation = opengil::delete_ui_primitives(file, primitive_indexes, options);
     command_name = "ui.delete";
+    result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
+    output_bytes = mutation.bytes;
+  } else if (subcommand == "import-pixel") {
+    opengil::UiPixelImportOptions options;
+    options.pixel_size = require_double(args, "pixel-size");
+    options.target_controller_entry_id = 1073741855;
+    const auto mutation = opengil::import_pixel_png_as_ui_primitives(
+        file,
+        std::filesystem::path(require_value(args, "png")),
+        options);
+    command_name = "ui.import-pixel";
     result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
   } else {

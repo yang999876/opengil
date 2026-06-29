@@ -30,6 +30,7 @@ def main() -> int:
         "create_scene_prefab_instance",
         "delete_prefab",
         "get_model",
+        "import_pixel_png_as_ui_primitives",
         "list_custom_vars",
         "list_nodegraphs",
         "list_prefab_tabs",

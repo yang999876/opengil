@@ -24,6 +24,7 @@
 #include "opengil/semantic.hpp"
 #include "opengil/ui_ops.hpp"
 #include "opengil/ui_patch_ops.hpp"
+#include "opengil/ui_pixel_import_ops.hpp"
 #include "opengil/ui_structure_ops.hpp"
 
 namespace py = pybind11;
@@ -806,6 +807,13 @@ class GilDocument {
     return apply(opengil::delete_ui_primitives(file_, primitive_indexes, options), ui_structure_summary_to_dict);
   }
 
+  py::dict import_pixel_png_as_ui_primitives(const std::filesystem::path& png_path, double pixel_size) {
+    opengil::UiPixelImportOptions options;
+    options.pixel_size = pixel_size;
+    options.target_controller_entry_id = 1073741855;
+    return apply(opengil::import_pixel_png_as_ui_primitives(file_, png_path, options), ui_structure_summary_to_dict);
+  }
+
  private:
   template <typename Mutation, typename Formatter>
   py::dict apply(const Mutation& mutation, Formatter formatter) {
@@ -1015,7 +1023,12 @@ PYBIND11_MODULE(opengil, m) {
           "delete_ui_primitives",
           &GilDocument::delete_ui_primitives,
           py::arg("primitive_indexes"),
-          py::arg("target_controller_entry_id") = py::none());
+          py::arg("target_controller_entry_id") = py::none())
+      .def(
+          "import_pixel_png_as_ui_primitives",
+          &GilDocument::import_pixel_png_as_ui_primitives,
+          py::arg("png_path"),
+          py::arg("pixel_size"));
 
   m.def("open", &open_document, py::arg("path"));
 }

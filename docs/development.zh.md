@@ -120,5 +120,5 @@ rg '#include "opengil/json.hpp"' src/ops src/semantic
 - pre-1.0 项目，C++ public API 和 Python binding 都还可能调整。
 - `validate` 不是完整语义校验。
 - `.proto` 文件只是文档/参考，不用于无损写回。
-- `ui import-geometrize` 和 `ui import-pixel` 当前不实现。
+- `ui import-geometrize` 当前不实现。
 - `src/cli/main.cpp` 仍较大，后续要按真实职责拆，而不是拆薄转发层。
