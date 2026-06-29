@@ -756,33 +756,6 @@ std::string handle_ui(const Args& args) {
     command_name = "ui.append";
     result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
     output_bytes = mutation.bytes;
-  } else if (subcommand == "append-many") {
-    const auto template_file = opengil::load_gil_file(require_value(args, "template"));
-    const auto explicit_ids = parse_u64_csv(value_or_empty(args, "entry-ids"), "entry-ids");
-    const size_t count = optional_u64(args, "count")
-        ? require_size(args, "count")
-        : (explicit_ids.empty() ? 1 : explicit_ids.size());
-    if (!explicit_ids.empty() && explicit_ids.size() != count) {
-      throw CliError("USAGE", "--entry-ids count must match --count", EXIT_USAGE);
-    }
-
-    opengil::UiAppendManyOptions options;
-    options.template_primitive_index = optional_u64(args, "template-primitive-index")
-        ? require_size(args, "template-primitive-index")
-        : 0;
-    options.target_controller_entry_id = optional_u64(args, "target-controller-entry-id")
-        ? optional_u64(args, "target-controller-entry-id")
-        : optional_u64(args, "controller-entry-id");
-    options.items.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-      opengil::UiAppendManyItem item;
-      if (!explicit_ids.empty()) item.entry_id = explicit_ids[i];
-      options.items.push_back(item);
-    }
-    const auto mutation = opengil::append_many_ui_primitives_from_template(file, template_file, options);
-    command_name = "ui.append-many";
-    result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
-    output_bytes = mutation.bytes;
   } else if (subcommand == "retain") {
     const auto primitive_indexes = parse_size_csv(require_value(args, "primitive-indexes"), "primitive-indexes");
     opengil::UiRetainOptions options;

@@ -18,7 +18,6 @@ def main() -> int:
         "add_attachment_points_from_decorations",
         "add_custom_var",
         "add_decorations",
-        "append_many_ui_primitives",
         "append_ui_primitive",
         "attach_all_nodegraphs",
         "attach_nodegraph",

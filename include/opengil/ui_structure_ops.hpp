@@ -31,16 +31,6 @@ struct UiAppendOptions {
   std::optional<uint64_t> entry_id;
 };
 
-struct UiAppendManyItem {
-  std::optional<uint64_t> entry_id;
-};
-
-struct UiAppendManyOptions {
-  size_t template_primitive_index = 0;
-  std::optional<uint64_t> target_controller_entry_id;
-  std::vector<UiAppendManyItem> items;
-};
-
 struct UiRetainOptions {
   std::optional<uint64_t> target_controller_entry_id;
 };
@@ -55,11 +45,6 @@ UiStructureMutation append_ui_primitive_from_template(
     const GilFile& file,
     const GilFile& template_file,
     const UiAppendOptions& options = {});
-
-UiStructureMutation append_many_ui_primitives_from_template(
-    const GilFile& file,
-    const GilFile& template_file,
-    const UiAppendManyOptions& options);
 
 UiStructureMutation retain_ui_primitives(
     const GilFile& file,

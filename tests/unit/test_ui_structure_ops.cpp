@@ -219,18 +219,6 @@ int main() {
   OPENGIL_CHECK((append.summary.changed_top_fields == std::vector<uint32_t>{9}));
   check_only_top9_changed(target, append_file);
 
-  opengil::UiAppendManyOptions many_options;
-  many_options.items = {{}, {8008}};
-  const auto many = opengil::append_many_ui_primitives_from_template(target, templ, many_options);
-  const auto many_file = mutated_file(target, many);
-  list = opengil::list_ui_primitives(many_file);
-  OPENGIL_CHECK(opengil::validate_gil(many_file).ok);
-  OPENGIL_CHECK(list.primitives.size() == 4);
-  OPENGIL_CHECK(list.primitives[2].entry_id == 1073741842);
-  OPENGIL_CHECK(list.primitives[3].entry_id == 8008);
-  OPENGIL_CHECK((many.summary.entry_ids == std::vector<uint64_t>{7001, 7002, 1073741842, 8008}));
-  check_only_top9_changed(target, many_file);
-
   const auto retained = opengil::retain_ui_primitives(append_file, {2, 0});
   const auto retained_file = mutated_file(append_file, retained);
   list = opengil::list_ui_primitives(retained_file);

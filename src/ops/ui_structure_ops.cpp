@@ -450,54 +450,6 @@ UiStructureMutation append_ui_primitive_from_template(
   return make_mutation(file, std::move(next_payload), std::move(summary));
 }
 
-UiStructureMutation append_many_ui_primitives_from_template(
-    const GilFile& file,
-    const GilFile& template_file,
-    const UiAppendManyOptions& options) {
-  const auto top9 = top_level_data(file, 9);
-  const auto template_top9 = top_level_data(template_file, 9);
-  if (!top9) throw std::runtime_error("top-level field 9 not found");
-  if (!template_top9) throw std::runtime_error("template top-level field 9 not found");
-
-  const auto template_primitives = primitive_entries(*template_top9);
-  if (options.template_primitive_index >= template_primitives.size()) {
-    throw std::runtime_error("template ui primitive not found");
-  }
-  const auto& template_primitive = template_primitives[options.template_primitive_index];
-  const auto template_controller_id = direct_controller_id(template_primitive);
-  const uint64_t controller_id = options.target_controller_entry_id
-      ? *options.target_controller_entry_id
-      : template_controller_id.value_or(kDefaultUiPrimitiveControllerEntryId);
-  controller_entry(*top9, controller_id);
-
-  auto used_ids = used_entry_ids(*top9);
-  uint64_t next_allocated_id = allocate_top9_entry_id(*top9);
-  std::vector<uint64_t> new_entry_ids;
-  std::vector<std::vector<uint8_t>> new_entries;
-
-  for (const auto& item : options.items) {
-    uint64_t entry_id = 0;
-    if (item.entry_id) {
-      entry_id = *item.entry_id;
-    } else {
-      while (used_ids.contains(next_allocated_id)) ++next_allocated_id;
-      entry_id = next_allocated_id++;
-    }
-    if (used_ids.contains(entry_id)) throw std::runtime_error("ui primitive entry id already exists");
-    used_ids.insert(entry_id);
-    new_entry_ids.push_back(entry_id);
-    new_entries.push_back(clone_primitive_entry(template_primitive, entry_id, controller_id));
-  }
-
-  auto next_top9 = append_controller_child_ids(*top9, controller_id, new_entry_ids);
-  next_top9 = insert_top9_entries_before(bytes_span(next_top9), new_entries, 1073741841);
-
-  auto next_payload = replace_top_level_field_data(payload(file), 9, next_top9);
-  auto result_file = file_from_bytes(file, build_gil_bytes(file.header, next_payload));
-  auto summary = summary_for_result("appendManyUiPrimitives", result_file, controller_id);
-  return make_mutation(file, std::move(next_payload), std::move(summary));
-}
-
 UiStructureMutation retain_ui_primitives(
     const GilFile& file,
     const std::vector<size_t>& primitive_indexes,

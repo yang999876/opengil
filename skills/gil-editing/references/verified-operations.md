@@ -14,7 +14,7 @@
 - Rename prefab: prefab `4.1.6.11.1` when present, with fallbacks for older observed name paths. This changes `top4` only.
 - Scene transform: replace full transform at `5.1.6.11`.
 - Preview transform: replace full transform at `8.1.6.11`.
-- UI primitives: list and edit `top9.field502` entries. Append/append-many clone
+- UI primitives: list and edit `top9.field502` entries. Append clones
   an observed primitive entry from a template file, patch entry/controller ids,
   append the controller child id list, and insert the new entries before the
   observed sentinel entry when present. Retain removes unkept primitive entries

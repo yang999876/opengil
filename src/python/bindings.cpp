@@ -813,27 +813,6 @@ class GilDocument {
     return apply(opengil::append_ui_primitive_from_template(file_, template_file, options), ui_structure_summary_to_dict);
   }
 
-  py::dict append_many_ui_primitives(
-      const std::filesystem::path& template_path,
-      size_t template_primitive_index,
-      const py::object& target_controller_entry_id,
-      const py::object& items) {
-    const auto template_file = load_template_file(template_path);
-    opengil::UiAppendManyOptions options;
-    options.template_primitive_index = template_primitive_index;
-    options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
-    for (const auto item : items) {
-      opengil::UiAppendManyItem append_item;
-      if (py::isinstance<py::dict>(item)) {
-        append_item.entry_id = optional_u64_from_py(get_or_none(py::reinterpret_borrow<py::dict>(item), "entry_id"));
-      } else if (!py::reinterpret_borrow<py::object>(item).is_none()) {
-        append_item.entry_id = py::reinterpret_borrow<py::object>(item).cast<uint64_t>();
-      }
-      options.items.push_back(append_item);
-    }
-    return apply(opengil::append_many_ui_primitives_from_template(file_, template_file, options), ui_structure_summary_to_dict);
-  }
-
   py::dict retain_ui_primitives(const std::vector<size_t>& primitive_indexes, const py::object& target_controller_entry_id) {
     opengil::UiRetainOptions options;
     options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id);
@@ -1065,13 +1044,6 @@ PYBIND11_MODULE(opengil, m) {
           py::arg("template_primitive_index") = 0,
           py::arg("target_controller_entry_id") = py::none(),
           py::arg("entry_id") = py::none())
-      .def(
-          "append_many_ui_primitives",
-          &GilDocument::append_many_ui_primitives,
-          py::arg("template_path"),
-          py::arg("template_primitive_index"),
-          py::arg("target_controller_entry_id"),
-          py::arg("items"))
       .def(
           "retain_ui_primitives",
           &GilDocument::retain_ui_primitives,
