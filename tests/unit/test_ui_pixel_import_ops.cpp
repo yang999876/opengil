@@ -140,7 +140,7 @@ int main() {
   OPENGIL_CHECK(opengil::validate_gil(changed).ok);
 
   const auto list = opengil::list_ui_primitives(changed, 1073741855);
-  OPENGIL_CHECK(list.primitives.size() == 4);
+  OPENGIL_CHECK(list.primitives.size() == 3);
   OPENGIL_CHECK(list.primitives[0].name == "pixel_0_0");
   OPENGIL_CHECK(list.primitives[0].color == -65536);
   OPENGIL_CHECK(list.primitives[0].transform.position.x == 0.0);
@@ -148,20 +148,15 @@ int main() {
   OPENGIL_CHECK(list.primitives[0].transform.size.x == 8.0);
   OPENGIL_CHECK(list.primitives[0].transform.size.y == 8.0);
   OPENGIL_CHECK(list.primitives[1].name == "pixel_1_0");
-  OPENGIL_CHECK(list.primitives[1].color == -16711936);
+  OPENGIL_CHECK(list.primitives[1].color == -2147418368);
   OPENGIL_CHECK(list.primitives[1].transform.position.x == 8.0);
   OPENGIL_CHECK(list.primitives[1].transform.position.y == 0.0);
   OPENGIL_CHECK(list.primitives[2].name == "pixel_0_1");
   OPENGIL_CHECK(list.primitives[2].color == -16776961);
   OPENGIL_CHECK(list.primitives[2].transform.position.x == 0.0);
   OPENGIL_CHECK(list.primitives[2].transform.position.y == 8.0);
-  OPENGIL_CHECK(list.primitives[3].name == "pixel_1_1");
-  OPENGIL_CHECK(list.primitives[3].color == -1);
-  OPENGIL_CHECK(list.primitives[3].transform.position.x == 8.0);
-  OPENGIL_CHECK(list.primitives[3].transform.position.y == 8.0);
-
   OPENGIL_CHECK(mutation.summary.kind == "importPixelPngUiPrimitives");
-  OPENGIL_CHECK(mutation.summary.primitive_count == 4);
+  OPENGIL_CHECK(mutation.summary.primitive_count == 3);
   OPENGIL_CHECK((mutation.summary.changed_top_fields == std::vector<uint32_t>{9}));
   OPENGIL_CHECK(throws_for_non_png(file));
 

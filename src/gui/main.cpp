@@ -382,7 +382,7 @@ void draw_pixel_art_panel() {
   ImGui::Separator();
   ImGui::BulletText("Accept PNG only.");
   ImGui::BulletText("Create one rectangle primitive per pixel.");
-  ImGui::BulletText("Write RGB color with opaque alpha.");
+  ImGui::BulletText("Skip fully transparent pixels.");
   ImGui::BulletText("Decoration block import remains under research.");
   ImGui::End();
 }

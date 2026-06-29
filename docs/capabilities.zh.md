@@ -133,7 +133,7 @@ opengil ui import-pixel --input input.gil --output output.gil --png pixel.png --
 ```
 
 UI primitive 新增走代码内置结构生成路线，不再从模板文件克隆 primitive。
-`ui import-pixel` 只接受 PNG，最多导入 10000 个像素。
+`ui import-pixel` 只接受 PNG，最多读取 10000 个像素；alpha 为 0 的像素会跳过。
 `ui import-geometrize` 当前不实现。
 
 ## Python Binding
