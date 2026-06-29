@@ -70,9 +70,9 @@ endif()
 
 if(WIN32)
   add_executable(opengil_gui WIN32
+    src/gui/i18n.cpp
     src/gui/main.cpp
     third_party/imgui/imgui.cpp
-    third_party/imgui/imgui_demo.cpp
     third_party/imgui/imgui_draw.cpp
     third_party/imgui/imgui_tables.cpp
     third_party/imgui/imgui_widgets.cpp
@@ -91,8 +91,13 @@ if(WIN32)
     imm32
   )
   if(MSVC)
-    target_compile_options(opengil_gui PRIVATE /permissive-)
+    target_compile_options(opengil_gui PRIVATE /permissive- /utf-8)
   endif()
+  add_custom_command(TARGET opengil_gui POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      ${CMAKE_CURRENT_SOURCE_DIR}/assets
+      $<TARGET_FILE_DIR:opengil_gui>/assets
+  )
 endif()
 
 enable_testing()
