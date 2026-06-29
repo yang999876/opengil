@@ -378,12 +378,12 @@ void draw_nodegraphs_panel(const AppState& app) {
 
 void draw_pixel_art_panel() {
   ImGui::Begin("Pixel Art Import");
-  ImGui::TextWrapped("Planned: PNG-only import that maps pixels to decoration blocks.");
+  ImGui::TextWrapped("PNG import maps pixels to generated UI primitives.");
   ImGui::Separator();
-  ImGui::BulletText("Open PNG and read RGBA pixels.");
-  ImGui::BulletText("Create or target an empty prefab.");
-  ImGui::BulletText("Add one decoration block per visible pixel.");
-  ImGui::BulletText("Color write path is still under research.");
+  ImGui::BulletText("Accept PNG only.");
+  ImGui::BulletText("Create one rectangle primitive per pixel.");
+  ImGui::BulletText("Write RGB color with opaque alpha.");
+  ImGui::BulletText("Decoration block import remains under research.");
   ImGui::End();
 }
 

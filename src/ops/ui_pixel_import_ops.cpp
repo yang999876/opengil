@@ -95,8 +95,8 @@ StbiImage load_png_rgba(const std::filesystem::path& png_path) {
   return image;
 }
 
-int64_t argb_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-  const uint32_t raw = (static_cast<uint32_t>(a) << 24) |
+int64_t opaque_rgb_color(uint8_t r, uint8_t g, uint8_t b) {
+  const uint32_t raw = (0xffu << 24) |
                        (static_cast<uint32_t>(r) << 16) |
                        (static_cast<uint32_t>(g) << 8) |
                        static_cast<uint32_t>(b);
@@ -120,11 +120,10 @@ std::vector<UiGeneratedPrimitiveSpec> specs_from_image(const StbiImage& image, d
       spec.y = static_cast<double>(y) * pixel_size;
       spec.width = pixel_size;
       spec.height = pixel_size;
-      spec.color = argb_color(
+      spec.color = opaque_rgb_color(
           image.pixels[offset],
           image.pixels[offset + 1],
-          image.pixels[offset + 2],
-          image.pixels[offset + 3]);
+          image.pixels[offset + 2]);
       spec.layer = 9;
       spec.name = "pixel_" + std::to_string(x) + "_" + std::to_string(y);
       specs.push_back(std::move(spec));

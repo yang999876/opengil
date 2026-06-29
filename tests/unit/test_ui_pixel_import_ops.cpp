@@ -148,7 +148,7 @@ int main() {
   OPENGIL_CHECK(list.primitives[0].transform.size.x == 8.0);
   OPENGIL_CHECK(list.primitives[0].transform.size.y == 8.0);
   OPENGIL_CHECK(list.primitives[1].name == "pixel_1_0");
-  OPENGIL_CHECK(list.primitives[1].color == -2147418368);
+  OPENGIL_CHECK(list.primitives[1].color == -16711936);
   OPENGIL_CHECK(list.primitives[1].transform.position.x == 8.0);
   OPENGIL_CHECK(list.primitives[1].transform.position.y == 0.0);
   OPENGIL_CHECK(list.primitives[2].name == "pixel_0_1");
@@ -156,7 +156,7 @@ int main() {
   OPENGIL_CHECK(list.primitives[2].transform.position.x == 0.0);
   OPENGIL_CHECK(list.primitives[2].transform.position.y == 8.0);
   OPENGIL_CHECK(list.primitives[3].name == "pixel_1_1");
-  OPENGIL_CHECK(list.primitives[3].color == 16777215);
+  OPENGIL_CHECK(list.primitives[3].color == -1);
   OPENGIL_CHECK(list.primitives[3].transform.position.x == 8.0);
   OPENGIL_CHECK(list.primitives[3].transform.position.y == 8.0);
 
