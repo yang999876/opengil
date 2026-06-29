@@ -23,6 +23,7 @@ add_library(opengil_core
   src/ops/object_ops.cpp
   src/ops/prefab_ops.cpp
   src/ops/projectile_ops.cpp
+  src/ops/ui_generated_ops.cpp
   src/ops/ui_ops.cpp
   src/ops/ui_patch_ops.cpp
   src/ops/ui_structure_ops.cpp
@@ -130,6 +131,10 @@ add_test(NAME opengil_ui_patch_tests COMMAND opengil_ui_patch_tests)
 add_executable(opengil_ui_structure_tests tests/unit/test_ui_structure_ops.cpp)
 target_link_libraries(opengil_ui_structure_tests PRIVATE opengil_core)
 add_test(NAME opengil_ui_structure_tests COMMAND opengil_ui_structure_tests)
+
+add_executable(opengil_ui_generated_tests tests/unit/test_ui_generated_ops.cpp)
+target_link_libraries(opengil_ui_generated_tests PRIVATE opengil_core)
+add_test(NAME opengil_ui_generated_tests COMMAND opengil_ui_generated_tests)
 
 add_executable(opengil_object_tests tests/unit/test_object_ops.cpp)
 target_link_libraries(opengil_object_tests PRIVATE opengil_core)
