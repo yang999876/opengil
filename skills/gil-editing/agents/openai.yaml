@@ -1,4 +1,4 @@
-display_name: GIL Editing
-short_description: Inspect and safely edit verified `.gil` structures with openGil.
-default_prompt: Use the gil-editing skill to inspect, validate, and safely modify a `.gil` file with the openGil CLI.
+display_name: openGil .gil Editing
+short_description: Inspect, research, and safely edit verified `.gil` game file structures with openGil.
+default_prompt: Use the gil-editing skill to inspect, validate, diff, and safely modify a `.gil` game file with the openGil CLI.
 

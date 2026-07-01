@@ -1,6 +1,7 @@
 # CLI Usage For Agents
 
-`opengil` 的完整能力和示例见仓库根目录的 `docs/capabilities.zh.md`。
+`opengil` 的能力总览见仓库根目录的 `docs/capabilities.md`。
+完整 CLI 参数和示例见 `docs/cli_api.md`，Python Binding 见 `docs/python_api.md`。
 这个文件只保留 agent 调用时最容易出错的规则。
 
 ## Default Flow
@@ -13,7 +14,7 @@ opengil <write-command> --input input.gil --output output.gil
 opengil validate --input output.gil
 ```
 
-stdout 是机器可读 JSON；stderr 只放日志和诊断。
+stdout 是机器可读 JSON envelope；成功和失败结果都从 stdout 读取。
 
 ## Rules
 

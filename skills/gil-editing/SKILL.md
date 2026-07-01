@@ -1,23 +1,24 @@
 ---
 name: gil-editing
-description: Use when working with Genshin/Miliastra `.gil` files, prefab records, scene or preview instances, category tabs, nodegraph references, decorations, attachment points, custom variables, model asset ids, projectile parameters, or UI primitives. Prefer the openGil `opengil` CLI for inspecting, validating, and safely editing `.gil` files without full JSON IR round-trips.
+description: Use when working with openGil or Genshin/Miliastra files that use the `.gil` game file extension: inspect, validate, diff before/after samples, edit verified prefab/scene/preview/tab/nodegraph/decoration/attachment/custom variable/model/projectile/UI primitive structures, or research unknown `.gil` fields.
 ---
 
-# GIL Editing
+# openGil `.gil` File Editing
 
-Use `opengil` as the primary tool for `.gil` work.
+Use `opengil` as the primary tool for `.gil` file inspection, validation, research, and verified writes.
 
 ## Core Rules
 
-- Inspect before editing.
+- Start with `inspect` and `validate`.
+- Use `list-*`, `get-*`, or `ui list` to locate ids before writes.
 - Prefer numeric ids over names for writes.
 - Prefer `--tab-id` over `--tab` on Windows command lines when tab names contain non-ASCII text.
-- Use `--dry-run` before complex writes.
+- Use `--dry-run` before writes that change user data.
 - For repeated edits, run each operation with `--dry-run` first, then either write accepted CLI operations in sequence or use the Python binding `GilDocument` API.
+- Read the machine JSON envelope from stdout for both success and error results.
 - Run structural `validate` after every write.
-- Do not treat structural `validate` as semantic proof; it does not check mirrored records, duplicate ids, tab mappings, or dangling references.
-- Do not dump full JSON IR unless explicitly debugging legacy behavior.
-- Do not guess unknown structures. Ask for `before.gil` and `after.gil`, run `diff-summary`, then make a replay-first workflow.
+- Treat `validate` as structural validity, not semantic proof. Use operation summaries, semantic queries, game validation, and cross-save validation for confidence.
+- For unknown structures, require before/after `.gil` samples, run `diff-summary`, reproduce the editor change, validate in game, then generalize.
 
 ## Tool Pattern
 
@@ -29,13 +30,13 @@ opengil set-model --input input.gil --output output.gil --prefab-id 1077936130 -
 opengil validate --input output.gil
 ```
 
-Stdout is machine JSON. Keep stderr as logs only.
-`validate` reports structural validity only; use operation-specific summaries and
-known semantic paths for semantic confidence until `validate --semantic` exists.
+The CLI returns a JSON envelope on stdout. `validate` reports structural validity only; use operation-specific summaries and known semantic paths for semantic confidence.
 
 ## References
 
 - CLI usage: `references/cli-usage.md`
+- Full CLI API: `../../docs/cli_api.md`
+- Full Python API: `../../docs/python_api.md`
 - Verified operation surfaces: `references/verified-operations.md`
 - Known semantic paths: `references/semantic-paths.md`
 - Known pitfalls: `references/pitfalls.md`
