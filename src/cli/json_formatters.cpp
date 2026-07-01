@@ -500,6 +500,7 @@ std::string pixel_decoration_import_summary_to_json(const PixelDecorationImportS
       << ",\"assetId\":" << summary.asset_id
       << ",\"sourcePixelCount\":" << summary.source_pixel_count
       << ",\"decorationCount\":" << summary.decoration_count
+      << ",\"mergeSameColorRects\":" << (summary.merge_same_color_rects ? "true" : "false")
       << ",\"prefabDecorationIds\":" << uint64_array_json(summary.prefab_decoration_ids)
       << ",\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
       << "}";

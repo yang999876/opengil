@@ -13,6 +13,7 @@ struct PixelDecorationImportOptions {
   uint64_t prefab_id = 0;
   uint64_t asset_id = 0;
   double pixel_size = 1.0;
+  bool merge_same_color_rects = true;
 };
 
 struct PixelDecorationImportSummary {
@@ -20,6 +21,7 @@ struct PixelDecorationImportSummary {
   uint64_t asset_id = 0;
   size_t source_pixel_count = 0;
   size_t decoration_count = 0;
+  bool merge_same_color_rects = true;
   std::vector<uint64_t> prefab_decoration_ids;
   std::vector<uint32_t> changed_top_fields;
 };

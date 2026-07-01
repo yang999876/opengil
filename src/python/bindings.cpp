@@ -508,6 +508,7 @@ py::dict pixel_decoration_import_summary_to_dict(const opengil::PixelDecorationI
   out["asset_id"] = summary.asset_id;
   out["source_pixel_count"] = summary.source_pixel_count;
   out["decoration_count"] = summary.decoration_count;
+  out["merge_same_color_rects"] = summary.merge_same_color_rects;
   out["prefab_decoration_ids"] = vector_to_list(summary.prefab_decoration_ids);
   out["changed_top_fields"] = vector_to_list(summary.changed_top_fields);
   return out;
@@ -831,11 +832,13 @@ class GilDocument {
       const std::filesystem::path& png_path,
       uint64_t prefab_id,
       uint64_t asset_id,
-      double pixel_size) {
+      double pixel_size,
+      bool merge_same_color_rects) {
     opengil::PixelDecorationImportOptions options;
     options.prefab_id = prefab_id;
     options.asset_id = asset_id;
     options.pixel_size = pixel_size;
+    options.merge_same_color_rects = merge_same_color_rects;
     return apply(
         opengil::import_pixel_png_as_decoration_prefab(file_, png_path, options),
         pixel_decoration_import_summary_to_dict);
@@ -1062,7 +1065,8 @@ PYBIND11_MODULE(opengil, m) {
           py::arg("png_path"),
           py::arg("prefab_id"),
           py::arg("asset_id"),
-          py::arg("pixel_size"));
+          py::arg("pixel_size"),
+          py::arg("merge_same_color_rects") = true);
 
   m.def("open", &open_document, py::arg("path"));
 }

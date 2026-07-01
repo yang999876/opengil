@@ -83,7 +83,7 @@ Args parse_args(int argc, char** argv) {
     }
 
     const std::string key = item.substr(2);
-    if (key == "dry-run" || key == "in-place" || key == "human" || key == "summary") {
+    if (key == "dry-run" || key == "in-place" || key == "human" || key == "summary" || key == "no-merge") {
       args.flags.insert(key);
       continue;
     }
@@ -804,6 +804,7 @@ std::string handle_pixel_art(const Args& args) {
   options.prefab_id = require_u64(args, "prefab-id");
   options.asset_id = require_u64(args, "asset-id");
   options.pixel_size = require_double(args, "pixel-size");
+  options.merge_same_color_rects = !args.flags.contains("no-merge");
 
   const auto mutation = opengil::import_pixel_png_as_decoration_prefab(
       file,
