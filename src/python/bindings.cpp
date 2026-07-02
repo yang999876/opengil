@@ -201,6 +201,28 @@ py::dict object_summary_to_dict(const opengil::ObjectSummary& summary) {
   return out;
 }
 
+py::dict object_color_summary_to_dict(const opengil::ObjectColorSummary& summary) {
+  py::dict before;
+  before["color"] = optional_to_py(summary.before_color);
+  before["raw_color"] = optional_to_py(summary.before_raw_color);
+  before["rgb_color"] = optional_to_py(summary.before_rgb_color);
+  before["enabled"] = optional_to_py(summary.before_enabled);
+
+  py::dict after;
+  after["color"] = summary.after_color;
+  after["raw_color"] = summary.after_raw_color;
+  after["rgb_color"] = summary.after_rgb_color;
+  after["enabled"] = summary.after_enabled;
+
+  py::dict out;
+  out["kind"] = summary.kind;
+  out["object_id"] = summary.object_id;
+  out["before"] = before;
+  out["after"] = after;
+  out["changed_top_fields"] = vector_to_list(summary.changed_top_fields);
+  return out;
+}
+
 py::dict model_summary_to_dict(const opengil::SetModelSummary& summary) {
   py::dict out;
   out["prefab_id"] = summary.prefab_id;
@@ -441,6 +463,10 @@ py::dict scene_object_to_dict(const opengil::SceneObjectInfo& object) {
   out["prefab_name"] = object.prefab_name;
   out["asset_id"] = optional_to_py(object.asset_id);
   out["prefab_model_asset_id"] = optional_to_py(object.prefab_model_asset_id);
+  out["color"] = optional_to_py(object.color);
+  out["raw_color"] = optional_to_py(object.raw_color);
+  out["rgb_color"] = optional_to_py(object.rgb_color);
+  out["color_enabled"] = optional_to_py(object.color_enabled);
   out["transform"] = transform;
   return out;
 }
@@ -479,6 +505,7 @@ std::vector<opengil::DecorationSpec> decoration_specs_from_py(const py::object& 
     opengil::DecorationSpec spec;
     spec.asset_id = dict[py::str("asset_id")].cast<uint64_t>();
     spec.name = has_key(dict, "name") ? dict[py::str("name")].cast<std::string>() : std::string();
+    if (has_key(dict, "color")) spec.color = dict[py::str("color")].cast<int64_t>();
     spec.transform = transform_from_dict(dict);
     out.push_back(std::move(spec));
   }
@@ -505,6 +532,10 @@ py::dict pixel_decoration_import_summary_to_dict(const opengil::PixelDecorationI
   py::dict out;
   out["kind"] = "importPixelDecorationPrefab";
   out["prefab_id"] = summary.prefab_id;
+  out["prefab_name"] = optional_to_py(summary.prefab_name);
+  out["preview_object_id"] = optional_to_py(summary.preview_object_id);
+  out["target_tab_id"] = optional_to_py(summary.target_tab_id);
+  out["target_tab_name"] = optional_to_py(summary.target_tab_name);
   out["asset_id"] = summary.asset_id;
   out["source_pixel_count"] = summary.source_pixel_count;
   out["decoration_count"] = summary.decoration_count;
@@ -656,6 +687,10 @@ class GilDocument {
 
   py::dict set_scene_object_asset_id(uint64_t object_id, uint64_t asset_id) {
     return apply(opengil::set_scene_object_asset_id(file_, object_id, asset_id), object_summary_to_dict);
+  }
+
+  py::dict set_scene_object_color(uint64_t object_id, int64_t color) {
+    return apply(opengil::set_scene_object_color(file_, object_id, color), object_color_summary_to_dict);
   }
 
   py::dict set_model_asset_id(uint64_t prefab_id, uint64_t asset_id) {
@@ -821,10 +856,14 @@ class GilDocument {
     return apply(opengil::delete_ui_primitives(file_, primitive_indexes, options), ui_structure_summary_to_dict);
   }
 
-  py::dict import_pixel_png_as_ui_primitives(const std::filesystem::path& png_path, double pixel_size) {
+  py::dict import_pixel_png_as_ui_primitives(
+      const std::filesystem::path& png_path,
+      double pixel_size,
+      const py::object& target_controller_entry_id) {
     opengil::UiPixelImportOptions options;
     options.pixel_size = pixel_size;
-    options.target_controller_entry_id = 1073741855;
+    options.target_controller_entry_id = optional_u64_from_py(target_controller_entry_id)
+        .value_or(opengil::kDefaultUiPrimitiveControllerEntryId);
     return apply(opengil::import_pixel_png_as_ui_primitives(file_, png_path, options), ui_structure_summary_to_dict);
   }
 
@@ -833,12 +872,24 @@ class GilDocument {
       uint64_t prefab_id,
       uint64_t asset_id,
       double pixel_size,
-      bool merge_same_color_rects) {
+      bool merge_same_color_rects,
+      const py::object& prefab_name,
+      const py::object& preview_object_id,
+      bool prefab_only,
+      const py::object& target_tab_id,
+      const py::object& target_tab_name,
+      bool move_to_uncategorized) {
     opengil::PixelDecorationImportOptions options;
     options.prefab_id = prefab_id;
     options.asset_id = asset_id;
     options.pixel_size = pixel_size;
     options.merge_same_color_rects = merge_same_color_rects;
+    options.prefab_name = optional_string_from_py(prefab_name);
+    options.preview_object_id = optional_u64_from_py(preview_object_id);
+    options.prefab_only = prefab_only;
+    options.target_tab_id = optional_u64_from_py(target_tab_id);
+    options.target_tab_name = optional_string_from_py(target_tab_name);
+    options.move_to_uncategorized = move_to_uncategorized;
     return apply(
         opengil::import_pixel_png_as_decoration_prefab(file_, png_path, options),
         pixel_decoration_import_summary_to_dict);
@@ -936,6 +987,7 @@ PYBIND11_MODULE(opengil, m) {
           &GilDocument::set_scene_object_asset_id,
           py::arg("object_id"),
           py::arg("asset_id"))
+      .def("set_scene_object_color", &GilDocument::set_scene_object_color, py::arg("object_id"), py::arg("color"))
       .def("set_asset_id", &GilDocument::set_scene_object_asset_id, py::arg("object_id"), py::arg("asset_id"))
       .def("set_model_asset_id", &GilDocument::set_model_asset_id, py::arg("prefab_id"), py::arg("asset_id"))
       .def("set_prefab_model_asset_id", &GilDocument::set_model_asset_id, py::arg("prefab_id"), py::arg("asset_id"))
@@ -1058,7 +1110,8 @@ PYBIND11_MODULE(opengil, m) {
           "import_pixel_png_as_ui_primitives",
           &GilDocument::import_pixel_png_as_ui_primitives,
           py::arg("png_path"),
-          py::arg("pixel_size"))
+          py::arg("pixel_size"),
+          py::arg("target_controller_entry_id") = py::none())
       .def(
           "import_pixel_png_as_decoration_prefab",
           &GilDocument::import_pixel_png_as_decoration_prefab,
@@ -1066,7 +1119,13 @@ PYBIND11_MODULE(opengil, m) {
           py::arg("prefab_id"),
           py::arg("asset_id"),
           py::arg("pixel_size"),
-          py::arg("merge_same_color_rects") = true);
+          py::arg("merge_same_color_rects") = true,
+          py::arg("prefab_name") = py::none(),
+          py::arg("preview_object_id") = py::none(),
+          py::arg("prefab_only") = false,
+          py::arg("target_tab_id") = py::none(),
+          py::arg("target_tab_name") = py::none(),
+          py::arg("move_to_uncategorized") = false);
 
   m.def("open", &open_document, py::arg("path"));
 }

@@ -14,6 +14,7 @@
 
 #include "opengil/gil.hpp"
 #include "opengil/object_ops.hpp"
+#include "opengil/semantic.hpp"
 #include "opengil/wire.hpp"
 
 namespace {
@@ -74,6 +75,27 @@ std::vector<uint8_t> transform(float x, float y, float z) {
   });
 }
 
+std::vector<uint8_t> string_bytes(std::string_view value) {
+  return std::vector<uint8_t>(value.begin(), value.end());
+}
+
+std::vector<uint8_t> disabled_red_color_payload() {
+  return message({
+      varint_field(3, 0xffff0000ull),
+      fixed32_field(4, 100.0f),
+      varint_field(5, 0x00ff0000ull),
+      varint_field(6, 6700),
+      varint_field(9, 6711),
+  });
+}
+
+std::vector<uint8_t> disabled_red_color_component() {
+  return message({
+      varint_field(1, 22),
+      len_field(32, disabled_red_color_payload()),
+  });
+}
+
 std::vector<uint8_t> scene_like_entry(uint64_t object_id) {
   return message({
       varint_field(1, object_id),
@@ -87,10 +109,29 @@ std::vector<uint8_t> scene_like_entry(uint64_t object_id) {
   });
 }
 
+std::vector<uint8_t> scene_like_entry_with_disabled_color(uint64_t object_id) {
+  return message({
+      varint_field(1, object_id),
+      len_field(2, message({
+          varint_field(1, 10009001),
+      })),
+      len_field(6, message({
+          len_field(11, transform(1.0f, 2.0f, 3.0f)),
+      })),
+      len_field(6, disabled_red_color_component()),
+      varint_field(8, 10009001),
+  });
+}
+
 std::vector<uint8_t> prefab_like_entry(uint64_t prefab_id) {
   return message({
       varint_field(1, prefab_id),
       varint_field(2, 1000000),
+      len_field(6, message({
+          len_field(11, message({
+              len_field(1, string_bytes("template_prefab")),
+          })),
+      })),
       len_field(7, message({
           len_field(11, transform(1.0f, 2.0f, 3.0f)),
       })),
@@ -129,6 +170,20 @@ opengil::GilFile make_synthetic_file() {
   return file;
 }
 
+opengil::GilFile make_color_file() {
+  const auto top5 = message({len_field(1, scene_like_entry_with_disabled_color(502))});
+  const auto payload = message({len_field(5, top5)});
+
+  opengil::GilHeader header;
+  header.schema = 1;
+
+  opengil::GilFile file;
+  file.path = "synthetic-object-color.gil";
+  file.header = header;
+  file.bytes = opengil::build_gil_bytes(header, payload);
+  return file;
+}
+
 template <typename Mutation>
 opengil::GilFile load_mutation_as_file(const Mutation& mutation, const char* name) {
   const auto path = std::filesystem::temp_directory_path() / name;
@@ -155,6 +210,35 @@ std::vector<std::vector<uint8_t>> entries(const opengil::GilFile& file, uint32_t
     result.emplace_back(data.begin(), data.end());
   }
   return result;
+}
+
+template <size_t N>
+std::optional<std::string> string_at_path(std::span<const uint8_t> message, const std::array<uint32_t, N>& path) {
+  auto current = message;
+  for (size_t i = 0; i < path.size(); ++i) {
+    bool found = false;
+    for (const auto& field : opengil::parse_owned_fields(current)) {
+      if (field.number != path[i] || field.wire != 2) continue;
+      if (i + 1 == path.size()) {
+        return std::string(field.data.begin(), field.data.end());
+      }
+      current = std::span<const uint8_t>(field.data.data(), field.data.size());
+      found = true;
+      break;
+    }
+    if (!found) return std::nullopt;
+  }
+  return std::nullopt;
+}
+
+std::vector<uint8_t> entry_by_id(const opengil::GilFile& file, uint32_t top_field, uint64_t id) {
+  const std::array<uint32_t, 1> id_path{1};
+  for (const auto& entry : entries(file, top_field)) {
+    const auto span = std::span<const uint8_t>(entry.data(), entry.size());
+    if (opengil::read_varint_at_path(span, id_path) == id) return entry;
+  }
+  OPENGIL_CHECK(false);
+  return {};
 }
 
 struct Mapping {
@@ -261,6 +345,40 @@ int main() {
   OPENGIL_CHECK(opengil::read_varint_at_path(scene_asset_entry, ref_path) == 20001221);
   OPENGIL_CHECK(opengil::read_varint_at_path(scene_asset_entry, asset_path) == 20001221);
 
+  const auto color_file = make_color_file();
+  const auto before_color_objects = opengil::list_scene_objects(color_file);
+  OPENGIL_CHECK(before_color_objects.size() == 1);
+  OPENGIL_CHECK(before_color_objects[0].color == -65536);
+  OPENGIL_CHECK(before_color_objects[0].raw_color == 0xffff0000ull);
+  OPENGIL_CHECK(before_color_objects[0].rgb_color == 0x00ff0000ull);
+  OPENGIL_CHECK(before_color_objects[0].color_enabled && !*before_color_objects[0].color_enabled);
+
+  const auto scene_color = opengil::set_scene_object_color(color_file, 502, -16776961);
+  OPENGIL_CHECK(scene_color.summary.kind == "sceneObjectColor");
+  OPENGIL_CHECK(scene_color.summary.object_id == 502);
+  OPENGIL_CHECK(scene_color.summary.before_color == -65536);
+  OPENGIL_CHECK(scene_color.summary.before_enabled && !*scene_color.summary.before_enabled);
+  OPENGIL_CHECK(scene_color.summary.after_color == -16776961);
+  OPENGIL_CHECK(scene_color.summary.after_raw_color == 0xff0000ffull);
+  OPENGIL_CHECK(scene_color.summary.after_rgb_color == 0x000000ffull);
+  OPENGIL_CHECK(scene_color.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(scene_color.changed_top_fields[0] == 5);
+  const auto scene_color_file = load_mutation_as_file(scene_color, "opengil-test-scene-color.gil");
+  OPENGIL_CHECK(opengil::validate_gil(scene_color_file).ok);
+  const auto scene_color_objects = opengil::list_scene_objects(scene_color_file);
+  OPENGIL_CHECK(scene_color_objects.size() == 1);
+  OPENGIL_CHECK(scene_color_objects[0].color == -16776961);
+  OPENGIL_CHECK(scene_color_objects[0].raw_color == 0xff0000ffull);
+  OPENGIL_CHECK(scene_color_objects[0].rgb_color == 0x000000ffull);
+  OPENGIL_CHECK(scene_color_objects[0].color_enabled == true);
+  const auto scene_color_entry = entry_by_id(scene_color_file, 5, 502);
+  const std::array<uint32_t, 3> color_enabled_path{6, 32, 1};
+  const std::array<uint32_t, 3> color_raw_path{6, 32, 3};
+  const std::array<uint32_t, 3> color_rgb_path{6, 32, 5};
+  OPENGIL_CHECK(opengil::read_varint_at_path(scene_color_entry, color_enabled_path) == 1);
+  OPENGIL_CHECK(opengil::read_varint_at_path(scene_color_entry, color_raw_path) == 0xff0000ffull);
+  OPENGIL_CHECK(opengil::read_varint_at_path(scene_color_entry, color_rgb_path) == 0x000000ffull);
+
   const auto preview = opengil::set_preview_transform(file, 801, transform);
   OPENGIL_CHECK(preview.changed_top_fields.size() == 1);
   OPENGIL_CHECK(preview.changed_top_fields[0] == 8);
@@ -292,6 +410,7 @@ int main() {
 
   opengil::CreatePrefabOptions prefab_create_options;
   prefab_create_options.prefab_id = 9002;
+  prefab_create_options.name = "named_prefab";
   prefab_create_options.transform = transform;
   const auto created_prefab = opengil::create_prefab(file, 20001220, prefab_create_options);
   OPENGIL_CHECK(created_prefab.changed_top_fields.size() == 2);
@@ -303,12 +422,33 @@ int main() {
   OPENGIL_CHECK(prefab_entries.size() == 2);
   const auto new_prefab_entry = std::span<const uint8_t>(prefab_entries[1].data(), prefab_entries[1].size());
   const std::array<uint32_t, 1> prefab_asset_path{2};
+  const std::array<uint32_t, 3> prefab_name_path{6, 11, 1};
   const std::array<uint32_t, 4> prefab_pos_x{7, 11, 1, 1};
   OPENGIL_CHECK(opengil::read_varint_at_path(new_prefab_entry, id_path) == 9002);
   OPENGIL_CHECK(opengil::read_varint_at_path(new_prefab_entry, prefab_asset_path) == 20001220);
+  OPENGIL_CHECK(string_at_path(new_prefab_entry, prefab_name_path) == "named_prefab");
   OPENGIL_CHECK(opengil::read_fixed32_at_path(new_prefab_entry, prefab_pos_x) == 10.0f);
   OPENGIL_CHECK(has_mapping(created_prefab_file, 6, 100, 9002));
   OPENGIL_CHECK(has_mapping(created_prefab_file, 3, 100, 9002));
+
+  opengil::CreatePrefabPreviewOptions preview_create_options;
+  preview_create_options.object_id = 9004;
+  preview_create_options.transform = transform;
+  const auto created_preview = opengil::create_prefab_preview(created_prefab_file, 9002, preview_create_options);
+  OPENGIL_CHECK(created_preview.summary.kind == "prefabPreview");
+  OPENGIL_CHECK(created_preview.summary.object_id == 9004);
+  OPENGIL_CHECK(created_preview.summary.prefab_id == 9002);
+  OPENGIL_CHECK(created_preview.changed_top_fields.size() == 2);
+  OPENGIL_CHECK(created_preview.changed_top_fields[0] == 8);
+  OPENGIL_CHECK(created_preview.changed_top_fields[1] == 6);
+  const auto created_preview_file = load_mutation_as_file(created_preview, "opengil-test-create-prefab-preview.gil");
+  OPENGIL_CHECK(opengil::validate_gil(created_preview_file).ok);
+  const auto new_preview_entry = entry_by_id(created_preview_file, 8, 9004);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_preview_entry, id_path) == 9004);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_preview_entry, ref_path) == 9002);
+  OPENGIL_CHECK(opengil::read_varint_at_path(new_preview_entry, asset_path) == 20001220);
+  OPENGIL_CHECK(opengil::read_fixed32_at_path(new_preview_entry, scene_pos_x) == 10.0f);
+  OPENGIL_CHECK(has_mapping(created_preview_file, 3, 400, 9004));
 
   opengil::CreateScenePrefabInstanceOptions instance_options;
   instance_options.object_id = 9003;

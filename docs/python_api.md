@@ -98,6 +98,7 @@ doc.create_scene_prefab_instance(
 
 doc.set_scene_transform(object_id, position=None, rotation=None, scale=None)
 doc.set_preview_transform(object_id, position=None, rotation=None, scale=None)
+doc.set_scene_object_color(object_id, color)
 
 doc.set_scene_object_asset_id(object_id, asset_id)
 doc.set_asset_id(object_id, asset_id)
@@ -211,12 +212,23 @@ doc.delete_ui_primitives(
     target_controller_entry_id=None,
 )
 
-doc.import_pixel_png_as_ui_primitives(png_path, pixel_size)
+doc.import_pixel_png_as_ui_primitives(
+    png_path,
+    pixel_size,
+    target_controller_entry_id=None,
+)
 doc.import_pixel_png_as_decoration_prefab(
     png_path,
     prefab_id,
     asset_id,
     pixel_size,
+    merge_same_color_rects=True,
+    prefab_name=None,
+    preview_object_id=None,
+    prefab_only=False,
+    target_tab_id=None,
+    target_tab_name=None,
+    move_to_uncategorized=False,
 )
 ```
 
@@ -238,6 +250,7 @@ decoration_specs = [
     {
         "asset_id": 20001220,
         "name": "DecoA",
+        "color": -65536,
         "position": (0.0, 1.0, 0.0),
         "rotation": (0.0, 0.0, 0.0),
         "scale": (1.0, 1.0, 1.0),

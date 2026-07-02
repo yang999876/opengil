@@ -52,6 +52,14 @@ void append_optional_string(std::ostringstream& out, const std::optional<std::st
   }
 }
 
+void append_optional_bool(std::ostringstream& out, const std::optional<bool>& value) {
+  if (value) {
+    out << json::bool_value(*value);
+  } else {
+    out << "null";
+  }
+}
+
 std::string vec3_to_json(const Vec3& value) {
   std::ostringstream out;
   out << "{\"x\":" << value.x << ",\"y\":" << value.y << ",\"z\":" << value.z << "}";
@@ -164,6 +172,32 @@ void append_ui_primitive(std::ostringstream& out, const UiPrimitive& primitive) 
   out << "}";
 }
 
+void append_ui_asset(std::ostringstream& out, const UiAsset& asset) {
+  out << "{\"assetIndex\":" << asset.asset_index
+      << ",\"top9Index\":" << asset.top9_index
+      << ",\"entryId\":";
+  append_optional_number(out, asset.entry_id);
+  out << ",\"parentEntryId\":";
+  append_optional_number(out, asset.parent_entry_id);
+  out << ",\"kind\":" << json::quote(asset.kind)
+      << ",\"name\":";
+  append_optional_string(out, asset.name);
+  out << ",\"resourceId\":";
+  append_optional_number(out, asset.resource_id);
+  out << ",\"color\":";
+  append_optional_number(out, asset.color);
+  out << ",\"rawColor\":";
+  append_optional_number(out, asset.raw_color);
+  out << ",\"layer\":";
+  append_optional_number(out, asset.layer);
+  out << ",\"transform\":";
+  append_ui_transform(out, asset.transform);
+  out << ",\"maskSize\":";
+  append_optional_ui_vec2(out, asset.mask_size, "w", "h");
+  out << ",\"childEntryIds\":" << uint64_array_json(asset.child_entry_ids)
+      << "}";
+}
+
 std::string clone_prefab_summary_to_json_with_kind(const ClonePrefabSummary& summary, const char* kind) {
   std::ostringstream preview_x;
   preview_x << std::fixed << std::setprecision(6) << summary.preview_x;
@@ -247,6 +281,14 @@ std::string scene_objects_to_json(const std::vector<SceneObjectInfo>& objects) {
     append_optional_number(out, object.asset_id);
     out << ",\"prefabModelAssetId\":";
     append_optional_number(out, object.prefab_model_asset_id);
+    out << ",\"color\":";
+    append_optional_number(out, object.color);
+    out << ",\"rawColor\":";
+    append_optional_number(out, object.raw_color);
+    out << ",\"rgbColor\":";
+    append_optional_number(out, object.rgb_color);
+    out << ",\"colorEnabled\":";
+    append_optional_bool(out, object.color_enabled);
     out << ",\"transform\":{\"position\":{\"x\":" << optional_float_number_json(object.transform.position_x)
         << ",\"y\":" << optional_float_number_json(object.transform.position_y)
         << ",\"z\":" << optional_float_number_json(object.transform.position_z)
@@ -320,6 +362,24 @@ std::string rename_prefab_summary_to_json(const RenamePrefabSummary& summary) {
   return out.str();
 }
 
+std::string prefab_tab_summary_to_json(const PrefabTabSummary& summary) {
+  std::ostringstream out;
+  out << "{\"kind\":" << json::quote(summary.kind)
+      << ",\"tabId\":";
+  append_optional_number(out, summary.tab_id);
+  out << ",\"tabName\":" << json::quote(summary.tab_name)
+      << ",\"prefabId\":" << summary.prefab_id
+      << ",\"sourceTab\":{\"id\":";
+  append_optional_number(out, summary.source_tab_id);
+  out << ",\"name\":" << json::quote(summary.source_tab_name)
+      << "},\"targetTab\":{\"id\":";
+  append_optional_number(out, summary.target_tab_id);
+  out << ",\"name\":" << json::quote(summary.target_tab_name)
+      << "},\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
+      << "}";
+  return out.str();
+}
+
 std::string delete_prefab_summary_to_json(const DeletePrefabSummary& summary) {
   return "{\"kind\":\"deletePrefab\",\"prefabId\":" + json::number(summary.prefab_id) +
          ",\"removedDecorationIds\":" + uint64_array_json(summary.removed_decoration_ids) +
@@ -342,6 +402,27 @@ std::string object_summary_to_json(const ObjectSummary& summary) {
   if (summary.asset_id) out << ",\"assetId\":" << *summary.asset_id;
   out << ",\"transform\":" << transform_to_json(summary.transform)
       << ",\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
+      << "}";
+  return out.str();
+}
+
+std::string object_color_summary_to_json(const ObjectColorSummary& summary) {
+  std::ostringstream out;
+  out << "{\"kind\":" << json::quote(summary.kind)
+      << ",\"objectId\":" << summary.object_id
+      << ",\"before\":{\"color\":";
+  append_optional_number(out, summary.before_color);
+  out << ",\"rawColor\":";
+  append_optional_number(out, summary.before_raw_color);
+  out << ",\"rgbColor\":";
+  append_optional_number(out, summary.before_rgb_color);
+  out << ",\"enabled\":";
+  append_optional_bool(out, summary.before_enabled);
+  out << "},\"after\":{\"color\":" << summary.after_color
+      << ",\"rawColor\":" << summary.after_raw_color
+      << ",\"rgbColor\":" << summary.after_rgb_color
+      << ",\"enabled\":" << json::bool_value(summary.after_enabled)
+      << "},\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
       << "}";
   return out.str();
 }
@@ -468,15 +549,30 @@ std::string ui_primitive_list_to_json(const UiPrimitiveList& list) {
   return out.str();
 }
 
+std::string ui_asset_list_to_json(const UiAssetList& list) {
+  std::ostringstream out;
+  out << "{\"kind\":\"uiAssetList\",\"parentEntryId\":" << list.parent_entry_id
+      << ",\"hasTop9\":" << json::bool_value(list.has_top9)
+      << ",\"hasTop46\":" << json::bool_value(list.has_top46)
+      << ",\"assetCount\":" << list.assets.size()
+      << ",\"assets\":[";
+  for (size_t i = 0; i < list.assets.size(); ++i) {
+    if (i) out << ",";
+    append_ui_asset(out, list.assets[i]);
+  }
+  out << "]}";
+  return out.str();
+}
+
 std::string ui_primitive_patch_summary_to_json(const UiPrimitivePatchSummary& summary) {
   std::ostringstream out;
   out << "{\"kind\":" << json::quote(summary.kind)
-      << ",\"primitiveIndex\":" << summary.primitive_index
+      << ",\"assetIndex\":" << summary.asset_index
       << ",\"entryId\":" << (summary.entry_id ? json::number(*summary.entry_id) : "null")
       << ",\"before\":";
-  append_ui_primitive(out, summary.before);
+  append_ui_asset(out, summary.before);
   out << ",\"after\":";
-  append_ui_primitive(out, summary.after);
+  append_ui_asset(out, summary.after);
   out << ",\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
       << "}";
   return out.str();
@@ -485,8 +581,8 @@ std::string ui_primitive_patch_summary_to_json(const UiPrimitivePatchSummary& su
 std::string ui_structure_summary_to_json(const UiStructureSummary& summary) {
   std::ostringstream out;
   out << "{\"kind\":" << json::quote(summary.kind)
-      << ",\"targetControllerEntryId\":" << summary.target_controller_entry_id
-      << ",\"primitiveCount\":" << summary.primitive_count
+      << ",\"targetParentEntryId\":" << summary.target_controller_entry_id
+      << ",\"assetCount\":" << summary.primitive_count
       << ",\"entryIds\":" << uint64_array_json(summary.entry_ids)
       << ",\"changedTopFields\":" << uint32_array_json(summary.changed_top_fields)
       << "}";
@@ -497,7 +593,16 @@ std::string pixel_decoration_import_summary_to_json(const PixelDecorationImportS
   std::ostringstream out;
   out << "{\"kind\":\"importPixelDecorationPrefab\""
       << ",\"prefabId\":" << summary.prefab_id
-      << ",\"assetId\":" << summary.asset_id
+      << ",\"prefabName\":";
+  append_optional_string(out, summary.prefab_name);
+  out << ",\"previewObjectId\":";
+  append_optional_number(out, summary.preview_object_id);
+  out << ",\"targetTab\":{\"id\":";
+  append_optional_number(out, summary.target_tab_id);
+  out << ",\"name\":";
+  append_optional_string(out, summary.target_tab_name);
+  out << "}";
+  out << ",\"assetId\":" << summary.asset_id
       << ",\"sourcePixelCount\":" << summary.source_pixel_count
       << ",\"decorationCount\":" << summary.decoration_count
       << ",\"mergeSameColorRects\":" << (summary.merge_same_color_rects ? "true" : "false")

@@ -19,6 +19,10 @@ std::filesystem::path fixture_path(const char* name) {
   return std::filesystem::path(OPENGIL_TEST_FIXTURE_DIR) / name;
 }
 
+std::filesystem::path diff_fixture_path(const char* name) {
+  return std::filesystem::path(OPENGIL_TEST_FIXTURE_DIR).parent_path() / "diff" / name;
+}
+
 template <typename Mutation>
 opengil::GilFile load_mutation_as_file(const Mutation& mutation, const char* name) {
   const auto path = std::filesystem::temp_directory_path() / name;
@@ -195,6 +199,12 @@ size_t len_field_count(const opengil::GilFile& file, uint32_t top_field_number, 
   return opengil::len_fields(*top, repeated_field_number).size();
 }
 
+std::vector<uint8_t> top_field_bytes(const opengil::GilFile& file, uint32_t top_field_number) {
+  const auto top = opengil::top_level_data(file, top_field_number);
+  OPENGIL_CHECK(top);
+  return std::vector<uint8_t>(top->begin(), top->end());
+}
+
 }  // namespace
 
 int main() {
@@ -290,6 +300,45 @@ int main() {
   OPENGIL_CHECK(opengil::list_prefab_tabs(deleted_file, 101).empty());
   OPENGIL_CHECK(!has_decoration_owner(deleted_file, 1001, 101));
   OPENGIL_CHECK(len_field_count(deleted_file, 10, 1) == 1);
+
+  const auto empty_diff = opengil::load_gil_file(diff_fixture_path("0empty.gil"));
+  const auto expected_created_tab = opengil::load_gil_file(diff_fixture_path("1create_a_tab.gil"));
+  const auto created_tab = opengil::create_prefab_tab(empty_diff, "Custom Tab_1");
+  OPENGIL_CHECK(created_tab.summary.tab_id == 3);
+  OPENGIL_CHECK(created_tab.summary.tab_name == "Custom Tab_1");
+  OPENGIL_CHECK(created_tab.summary.changed_top_fields.size() == 1);
+  OPENGIL_CHECK(created_tab.summary.changed_top_fields[0] == 6);
+  const auto created_tab_file = load_mutation_as_file(created_tab, "opengil-test-create-prefab-tab.gil");
+  OPENGIL_CHECK(opengil::validate_gil(created_tab_file).ok);
+  OPENGIL_CHECK(top_field_bytes(created_tab_file, 6) == top_field_bytes(expected_created_tab, 6));
+
+  const auto two_tab_diff = opengil::load_gil_file(diff_fixture_path("2two_tab.gil"));
+  const auto expected_moved_tab = opengil::load_gil_file(diff_fixture_path("3change_tab.gil"));
+  const auto moved_tab = opengil::move_prefab_to_tab_by_id(two_tab_diff, 1077936129, 4);
+  OPENGIL_CHECK(moved_tab.summary.source_tab_id == 3);
+  OPENGIL_CHECK(moved_tab.summary.target_tab_id == 4);
+  const auto moved_tab_file = load_mutation_as_file(moved_tab, "opengil-test-move-prefab-tab.gil");
+  OPENGIL_CHECK(opengil::validate_gil(moved_tab_file).ok);
+  OPENGIL_CHECK(top_field_bytes(moved_tab_file, 6) == top_field_bytes(expected_moved_tab, 6));
+
+  const auto moved_uncategorized = opengil::move_prefab_to_uncategorized(expected_moved_tab, 1077936129);
+  OPENGIL_CHECK(moved_uncategorized.summary.source_tab_id == 4);
+  OPENGIL_CHECK(moved_uncategorized.summary.target_tab_id == 2);
+  const auto moved_uncategorized_file =
+      load_mutation_as_file(moved_uncategorized, "opengil-test-move-prefab-uncategorized.gil");
+  OPENGIL_CHECK(opengil::validate_gil(moved_uncategorized_file).ok);
+  OPENGIL_CHECK(opengil::list_prefab_tabs(moved_uncategorized_file, 1077936129).empty());
+
+  const auto deleted_tab = opengil::delete_prefab_tab_by_id(two_tab_diff, 4);
+  OPENGIL_CHECK(deleted_tab.summary.tab_id == 4);
+  OPENGIL_CHECK(deleted_tab.summary.tab_name == "Custom Tab_2");
+  const auto deleted_tab_file = load_mutation_as_file(deleted_tab, "opengil-test-delete-prefab-tab.gil");
+  OPENGIL_CHECK(opengil::validate_gil(deleted_tab_file).ok);
+  const auto tabs_after_delete = opengil::list_tabs(deleted_tab_file);
+  OPENGIL_CHECK(tabs_after_delete.size() == 1);
+  OPENGIL_CHECK(tabs_after_delete[0].id == 3);
+  OPENGIL_CHECK(tabs_after_delete[0].prefab_ids.size() == 1);
+  OPENGIL_CHECK(tabs_after_delete[0].prefab_ids[0] == 1077936129);
 
   return 0;
 }

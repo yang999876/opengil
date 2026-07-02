@@ -26,6 +26,7 @@
 #include "opengil/projectile_ops.hpp"
 #include "opengil/semantic.hpp"
 #include "opengil/ui_ops.hpp"
+#include "opengil/ui_generated_ops.hpp"
 #include "opengil/ui_patch_ops.hpp"
 #include "opengil/ui_pixel_import_ops.hpp"
 #include "opengil/ui_structure_ops.hpp"
@@ -83,7 +84,8 @@ Args parse_args(int argc, char** argv) {
     }
 
     const std::string key = item.substr(2);
-    if (key == "dry-run" || key == "in-place" || key == "human" || key == "summary" || key == "no-merge") {
+    if (key == "dry-run" || key == "in-place" || key == "human" || key == "summary" ||
+        key == "no-merge" || key == "prefab-only" || key == "collision" || key == "uncategorized") {
       args.flags.insert(key);
       continue;
     }
@@ -142,6 +144,11 @@ int64_t require_i64(const Args& args, const std::string& key) {
 std::optional<uint64_t> optional_u64(const Args& args, const std::string& key) {
   if (value_or_empty(args, key).empty()) return std::nullopt;
   return require_u64(args, key);
+}
+
+std::optional<int64_t> optional_i64(const Args& args, const std::string& key) {
+  if (value_or_empty(args, key).empty()) return std::nullopt;
+  return require_i64(args, key);
 }
 
 size_t require_size(const Args& args, const std::string& key) {
@@ -614,10 +621,10 @@ std::string handle_custom_vars(const Args& args) {
 
 std::string handle_decoration(const Args& args) {
   if (args.positional.empty()) {
-    throw CliError("USAGE", "decoration requires a subcommand: add", EXIT_USAGE);
+    throw CliError("USAGE", "decoration requires a subcommand: add, set-asset, or set-color", EXIT_USAGE);
   }
   const std::string subcommand = args.positional[0];
-  if (subcommand != "add") {
+  if (subcommand != "add" && subcommand != "set-asset" && subcommand != "set-color") {
     throw CliError("USAGE", "unsupported decoration subcommand: " + subcommand, EXIT_USAGE);
   }
 
@@ -625,10 +632,30 @@ std::string handle_decoration(const Args& args) {
   GilFile file = opengil::load_gil_file(input_path);
   const auto output_path = resolve_write_output_path(args, input_path);
   const bool dry_run = args.flags.contains("dry-run");
-  const uint64_t prefab_id = require_u64(args, "prefab-id");
-  const auto spec = decoration_spec_from_args(args);
 
-  const auto mutation = opengil::add_prefab_decorations(file, prefab_id, {spec});
+  opengil::DecorationMutation mutation;
+  std::string command_name;
+  if (subcommand == "add") {
+    const uint64_t prefab_id = require_u64(args, "prefab-id");
+    const auto spec = decoration_spec_from_args(args);
+    opengil::DecorationAddOptions options;
+    options.sync_instances = !args.flags.contains("prefab-only");
+    mutation = opengil::add_prefab_decorations(file, prefab_id, {spec}, options);
+    command_name = "decoration.add";
+  } else if (subcommand == "set-asset") {
+    mutation = opengil::set_prefab_decoration_asset(
+        file,
+        require_u64(args, "decoration-id"),
+        require_u64(args, "asset-id"));
+    command_name = "decoration.set-asset";
+  } else {
+    mutation = opengil::set_prefab_decoration_color(
+        file,
+        require_u64(args, "decoration-id"),
+        require_i64(args, "color"));
+    command_name = "decoration.set-color";
+  }
+
   std::string output_json = "null";
   if (!dry_run) {
     if (output_path.empty()) {
@@ -642,7 +669,7 @@ std::string handle_decoration(const Args& args) {
   if (dry_run) {
     result = append_json_bool_field(std::move(result), "dryRun", true);
   }
-  const auto json = envelope("decoration.add", true, file_input_json(file), output_json, result, {}, {});
+  const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
   write_report_if_requested(args, json);
   return json;
 }
@@ -702,6 +729,123 @@ std::string handle_ui(const Args& args) {
 
   const auto input_path = std::filesystem::path(require_value(args, "input"));
   GilFile file = opengil::load_gil_file(input_path);
+  if (subcommand == "assets") {
+    if (args.positional.size() < 2) {
+      throw CliError("USAGE", "ui assets requires a subcommand", EXIT_USAGE);
+    }
+    const std::string assets_subcommand = args.positional[1];
+    const uint64_t parent_entry_id = optional_u64(args, "parent-entry-id")
+        .value_or(opengil::kDefaultUiAssetsControllerEntryId);
+    if (assets_subcommand == "list") {
+      const auto list = opengil::list_ui_assets(file, parent_entry_id);
+      const auto result = opengil::cli::ui_asset_list_to_json(list);
+      const auto json = envelope("ui.assets.list", true, file_input_json(file), "null", result, {}, {});
+      write_report_if_requested(args, json);
+      return json;
+    }
+
+    const auto output_path = resolve_write_output_path(args, input_path);
+    const bool dry_run = args.flags.contains("dry-run");
+    std::string command_name;
+    std::string result;
+    std::vector<uint8_t> output_bytes;
+
+    if (assets_subcommand == "image") {
+      if (args.positional.size() < 3) {
+        throw CliError("USAGE", "ui assets image requires a subcommand", EXIT_USAGE);
+      }
+      const std::string image_subcommand = args.positional[2];
+      if (image_subcommand == "set-resource") {
+        const auto mutation = opengil::set_ui_asset_image_resource(file, require_size(args, "asset-index"), require_u64(args, "resource-id"), parent_entry_id);
+        command_name = "ui.assets.image.set-resource";
+        result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else if (image_subcommand == "set-color") {
+        const auto mutation = opengil::set_ui_asset_image_color(file, require_size(args, "asset-index"), require_i64(args, "color"), parent_entry_id);
+        command_name = "ui.assets.image.set-color";
+        result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else if (image_subcommand == "set-transform") {
+        const auto mutation = opengil::set_ui_asset_image_transform(file, require_size(args, "asset-index"), ui_transform_from_args(args), parent_entry_id);
+        command_name = "ui.assets.image.set-transform";
+        result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else if (image_subcommand == "set-layer") {
+        const auto mutation = opengil::set_ui_asset_image_layer(file, require_size(args, "asset-index"), require_u64(args, "layer"), parent_entry_id);
+        command_name = "ui.assets.image.set-layer";
+        result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else if (image_subcommand == "set-name") {
+        const auto mutation = opengil::set_ui_asset_image_name(file, require_size(args, "asset-index"), require_value(args, "name"), parent_entry_id);
+        command_name = "ui.assets.image.set-name";
+        result = opengil::cli::ui_primitive_patch_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else {
+        throw CliError("USAGE", "unsupported ui assets image subcommand: " + image_subcommand, EXIT_USAGE);
+      }
+    } else if (assets_subcommand == "group") {
+      if (args.positional.size() < 3) {
+        throw CliError("USAGE", "ui assets group requires a subcommand", EXIT_USAGE);
+      }
+      const std::string group_subcommand = args.positional[2];
+      if (group_subcommand == "create") {
+        opengil::UiAssetGroupSpec group;
+        group.name = value_or_empty(args, "name").empty() ? "Asset Group" : require_value(args, "name");
+        group.x = optional_double(args, "pos-x").value_or(0.0);
+        group.y = optional_double(args, "pos-y").value_or(0.0);
+        group.width = require_double(args, "width");
+        group.height = require_double(args, "height");
+        group.scale_x = optional_double(args, "scale-x").value_or(1.0);
+        group.scale_y = optional_double(args, "scale-y").value_or(1.0);
+        group.scale_z = optional_double(args, "scale-z").value_or(1.0);
+        group.rotation_z = optional_double(args, "rot-z").value_or(0.0);
+        group.mask_width = optional_double(args, "mask-width");
+        group.mask_height = optional_double(args, "mask-height");
+        opengil::UiAssetCreateOptions options;
+        options.parent_entry_id = parent_entry_id;
+        const auto mutation = opengil::create_ui_asset_group(
+            file,
+            group,
+            parse_size_csv(require_value(args, "child-asset-indexes"), "child-asset-indexes"),
+            options);
+        command_name = "ui.assets.group.create";
+        result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
+        output_bytes = mutation.bytes;
+      } else {
+        throw CliError("USAGE", "unsupported ui assets group subcommand: " + group_subcommand, EXIT_USAGE);
+      }
+    } else if (assets_subcommand == "import-pixel") {
+      opengil::UiPixelImportOptions options;
+      options.pixel_size = require_double(args, "pixel-size");
+      options.target_parent_entry_id = parent_entry_id;
+      const auto mutation = opengil::import_pixel_png_as_ui_asset_images(
+          file,
+          std::filesystem::path(require_value(args, "png")),
+          options);
+      command_name = "ui.assets.import-pixel";
+      result = opengil::cli::ui_structure_summary_to_json(mutation.summary);
+      output_bytes = mutation.bytes;
+    } else {
+      throw CliError("USAGE", "unsupported ui assets subcommand: " + assets_subcommand, EXIT_USAGE);
+    }
+
+    std::string output_json = "null";
+    if (!dry_run) {
+      if (output_path.empty()) {
+        throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+      }
+      write_output_bytes(args, output_path, output_bytes);
+      output_json = output_file_json(output_path, output_bytes);
+    }
+
+    if (dry_run) {
+      result = append_json_bool_field(std::move(result), "dryRun", true);
+    }
+    const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
+    write_report_if_requested(args, json);
+    return json;
+  }
+
   const uint64_t controller_entry_id = optional_u64(args, "controller-entry-id")
       .value_or(opengil::kDefaultUiPrimitiveControllerEntryId);
   if (subcommand == "list") {
@@ -757,7 +901,9 @@ std::string handle_ui(const Args& args) {
   } else if (subcommand == "import-pixel") {
     opengil::UiPixelImportOptions options;
     options.pixel_size = require_double(args, "pixel-size");
-    options.target_controller_entry_id = 1073741855;
+    options.target_parent_entry_id = optional_u64(args, "target-controller-entry-id")
+        ? *optional_u64(args, "target-controller-entry-id")
+        : optional_u64(args, "controller-entry-id").value_or(opengil::kDefaultUiPrimitiveControllerEntryId);
     const auto mutation = opengil::import_pixel_png_as_ui_primitives(
         file,
         std::filesystem::path(require_value(args, "png")),
@@ -803,8 +949,14 @@ std::string handle_pixel_art(const Args& args) {
   opengil::PixelDecorationImportOptions options;
   options.prefab_id = require_u64(args, "prefab-id");
   options.asset_id = require_u64(args, "asset-id");
-  options.pixel_size = require_double(args, "pixel-size");
+  options.preview_object_id = optional_u64(args, "preview-object-id");
+  if (const auto name = value_or_empty(args, "name"); !name.empty()) options.prefab_name = name;
+  options.target_tab_id = optional_u64(args, "tab-id");
+  if (const auto tab_name = value_or_empty(args, "tab"); !tab_name.empty()) options.target_tab_name = tab_name;
+  options.move_to_uncategorized = args.flags.contains("uncategorized");
+  if (!value_or_empty(args, "pixel-size").empty()) options.pixel_size = require_double(args, "pixel-size");
   options.merge_same_color_rects = !args.flags.contains("no-merge");
+  options.prefab_only = args.flags.contains("prefab-only");
 
   const auto mutation = opengil::import_pixel_png_as_decoration_prefab(
       file,
@@ -981,6 +1133,8 @@ opengil::DecorationSpec decoration_spec_from_args(const Args& args) {
   opengil::DecorationSpec spec;
   spec.asset_id = require_u64(args, "asset-id");
   spec.name = require_value(args, "name");
+  spec.color = optional_i64(args, "color");
+  spec.collision_enabled = args.flags.contains("collision");
   spec.transform = transform_from_args(args);
   return spec;
 }
@@ -1028,6 +1182,7 @@ std::string handle_create_object(const Args& args) {
     } else if (args.command == "create-prefab") {
       opengil::CreatePrefabOptions options;
       options.prefab_id = optional_u64(args, "prefab-id");
+      if (const auto name = value_or_empty(args, "name"); !name.empty()) options.name = name;
       options.transform = transform;
       mutation = opengil::create_prefab(file, require_u64(args, "asset-id"), options, template_file ? &*template_file : nullptr);
     } else if (args.command == "create-scene-prefab-instance") {
@@ -1040,6 +1195,11 @@ std::string handle_create_object(const Args& args) {
           require_u64(args, "asset-id"),
           options,
           template_file ? &*template_file : nullptr);
+    } else if (args.command == "create-prefab-preview") {
+      opengil::CreatePrefabPreviewOptions options;
+      options.object_id = optional_u64(args, "object-id");
+      options.transform = transform;
+      mutation = opengil::create_prefab_preview(file, require_u64(args, "prefab-id"), options);
     } else {
       throw CliError("USAGE", "unsupported create command: " + args.command, EXIT_USAGE);
     }
@@ -1147,6 +1307,34 @@ std::string handle_set_transform(const Args& args, bool preview_space) {
   return json;
 }
 
+std::string handle_set_scene_object_color(const Args& args) {
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const uint64_t object_id = require_u64(args, "object-id");
+  const int64_t color = require_i64(args, "color");
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  const auto mutation = opengil::set_scene_object_color(file, object_id, color);
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) {
+      throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    }
+    write_output_bytes(args, output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  std::string result = opengil::cli::object_color_summary_to_json(mutation.summary);
+  if (dry_run) {
+    result = append_json_bool_field(std::move(result), "dryRun", true);
+  }
+  const auto json = envelope(args.command, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_with_input(const Args& args) {
   const auto input_path = require_value(args, "input");
   GilFile file = opengil::load_gil_file(input_path);
@@ -1206,6 +1394,62 @@ std::string handle_diff_summary(const Args& args) {
   return json;
 }
 
+std::string handle_prefab_tab(const Args& args) {
+  if (args.positional.empty()) {
+    throw CliError("USAGE", "prefab-tab requires a subcommand: create, delete, or move-prefab", EXIT_USAGE);
+  }
+  const std::string subcommand = args.positional[0];
+  const auto input_path = std::filesystem::path(require_value(args, "input"));
+  GilFile file = opengil::load_gil_file(input_path);
+  const auto output_path = resolve_write_output_path(args, input_path);
+  const bool dry_run = args.flags.contains("dry-run");
+
+  opengil::PrefabTabMutation mutation;
+  std::string command_name;
+  try {
+    if (subcommand == "create") {
+      mutation = opengil::create_prefab_tab(file, require_value(args, "name"), optional_u64(args, "tab-id"));
+      command_name = "prefab-tab.create";
+    } else if (subcommand == "delete") {
+      if (const auto tab_id = optional_u64(args, "tab-id")) {
+        mutation = opengil::delete_prefab_tab_by_id(file, *tab_id);
+      } else {
+        mutation = opengil::delete_prefab_tab(file, require_value(args, "name"));
+      }
+      command_name = "prefab-tab.delete";
+    } else if (subcommand == "move-prefab") {
+      const auto prefab_id = require_u64(args, "prefab-id");
+      if (args.flags.contains("uncategorized")) {
+        mutation = opengil::move_prefab_to_uncategorized(file, prefab_id);
+      } else if (const auto tab_id = optional_u64(args, "tab-id")) {
+        mutation = opengil::move_prefab_to_tab_by_id(file, prefab_id, *tab_id);
+      } else {
+        mutation = opengil::move_prefab_to_tab(file, prefab_id, require_value(args, "name"));
+      }
+      command_name = "prefab-tab.move-prefab";
+    } else {
+      throw CliError("USAGE", "unsupported prefab-tab subcommand: " + subcommand, EXIT_USAGE);
+    }
+  } catch (const CliError&) {
+    throw;
+  } catch (const std::exception& error) {
+    throw CliError("SEMANTIC_ERROR", error.what(), EXIT_SEMANTIC);
+  }
+
+  std::string output_json = "null";
+  if (!dry_run) {
+    if (output_path.empty()) throw CliError("USAGE", "write output path resolved empty", EXIT_USAGE);
+    write_output_bytes(args, output_path, mutation.bytes);
+    output_json = output_file_json(output_path, mutation.bytes);
+  }
+
+  auto result = opengil::cli::prefab_tab_summary_to_json(mutation.summary);
+  if (dry_run) result = append_json_bool_field(std::move(result), "dryRun", true);
+  const auto json = envelope(command_name, true, file_input_json(file), output_json, result, {}, {});
+  write_report_if_requested(args, json);
+  return json;
+}
+
 std::string handle_version() {
   return envelope(
       "version",
@@ -1242,14 +1486,19 @@ int main(int argc, char** argv) {
       output = handle_clone_prefab(args);
     } else if (args.command == "copy-prefab-to-tab") {
       output = handle_clone_prefab(args);
+    } else if (args.command == "prefab-tab") {
+      output = handle_prefab_tab(args);
     } else if (args.command == "create-scene-object" ||
                args.command == "create-prefab" ||
-               args.command == "create-scene-prefab-instance") {
+               args.command == "create-scene-prefab-instance" ||
+               args.command == "create-prefab-preview") {
       output = handle_create_object(args);
     } else if (args.command == "set-scene-transform") {
       output = handle_set_transform(args, false);
     } else if (args.command == "set-preview-transform") {
       output = handle_set_transform(args, true);
+    } else if (args.command == "set-scene-object-color") {
+      output = handle_set_scene_object_color(args);
     } else if (args.command == "attach-nodegraph") {
       output = handle_attach_nodegraph(args, false);
     } else if (args.command == "attach-all-nodegraphs") {

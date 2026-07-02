@@ -42,6 +42,43 @@ std::optional<uint64_t> read_entry_id(std::span<const uint8_t> entry) {
   return read_varint_path(entry, path);
 }
 
+int64_t color_from_varint(uint64_t raw) {
+  return static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(raw)));
+}
+
+struct SceneObjectColorInfo {
+  std::optional<int64_t> color;
+  std::optional<uint64_t> raw_color;
+  std::optional<uint64_t> rgb_color;
+  std::optional<bool> enabled;
+};
+
+std::optional<SceneObjectColorInfo> read_scene_object_color(std::span<const uint8_t> entry) {
+  const std::array<uint32_t, 1> component_id_path{1};
+  const std::array<uint32_t, 1> enabled_path{1};
+  const std::array<uint32_t, 1> color_path{3};
+  const std::array<uint32_t, 1> rgb_path{5};
+
+  for (const auto& component_field : len_fields(entry, 6)) {
+    const auto component = field_data(entry, component_field);
+    if (read_varint_path(component, component_id_path) != 22) continue;
+
+    const auto color_payload_field = first_len_field(component, 32);
+    if (!color_payload_field) continue;
+    const auto color_payload = field_data(component, *color_payload_field);
+
+    SceneObjectColorInfo info;
+    if (auto enabled = read_varint_path(color_payload, enabled_path)) info.enabled = *enabled != 0;
+    else info.enabled = false;
+    info.raw_color = read_varint_path(color_payload, color_path);
+    if (info.raw_color) info.color = color_from_varint(*info.raw_color);
+    info.rgb_color = read_varint_path(color_payload, rgb_path);
+    return info;
+  }
+
+  return std::nullopt;
+}
+
 template <size_t N>
 std::optional<float> read_fixed32_path(std::span<const uint8_t> message, const std::array<uint32_t, N>& path) {
   return read_fixed32_at_path(message, std::span<const uint32_t>(path.data(), path.size()));
@@ -282,6 +319,13 @@ std::vector<SceneObjectInfo> list_space_objects(const GilFile& file, uint32_t to
     info.ref_id = read_varint_path(entry, ref_path);
     const std::array<uint32_t, 1> asset_path{8};
     info.asset_id = read_varint_path(entry, asset_path);
+
+    if (auto color = read_scene_object_color(entry)) {
+      info.color = color->color;
+      info.raw_color = color->raw_color;
+      info.rgb_color = color->rgb_color;
+      info.color_enabled = color->enabled;
+    }
 
     if (info.ref_id) {
       const auto prefab_it = prefab_by_id.find(*info.ref_id);

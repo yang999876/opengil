@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,8 @@ namespace opengil {
 struct DecorationSpec {
   uint64_t asset_id = 0;
   std::string name;
+  std::optional<int64_t> color;
+  bool collision_enabled = false;
   Transform transform;
 };
 
@@ -29,9 +32,24 @@ struct DecorationMutation {
   DecorationSummary summary;
 };
 
+struct DecorationAddOptions {
+  bool sync_instances = true;
+};
+
 DecorationMutation add_prefab_decorations(
     const GilFile& file,
     uint64_t prefab_id,
-    const std::vector<DecorationSpec>& specs);
+    const std::vector<DecorationSpec>& specs,
+    const DecorationAddOptions& options = {});
+
+DecorationMutation set_prefab_decoration_asset(
+    const GilFile& file,
+    uint64_t prefab_decoration_id,
+    uint64_t asset_id);
+
+DecorationMutation set_prefab_decoration_color(
+    const GilFile& file,
+    uint64_t prefab_decoration_id,
+    int64_t color);
 
 }  // namespace opengil

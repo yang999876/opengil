@@ -11,20 +11,54 @@
 
 namespace opengil {
 
-struct UiPrimitivePatchSummary {
+struct UiAssetPatchSummary {
   std::string kind;
+  size_t asset_index = 0;
   size_t primitive_index = 0;
   std::optional<uint64_t> entry_id;
-  UiPrimitive before;
-  UiPrimitive after;
+  UiAsset before;
+  UiAsset after;
   std::vector<uint32_t> changed_top_fields;
 };
 
-struct UiPrimitivePatchMutation {
+struct UiAssetPatchMutation {
   std::vector<uint8_t> bytes;
   std::vector<uint8_t> payload;
-  UiPrimitivePatchSummary summary;
+  UiAssetPatchSummary summary;
 };
+
+UiAssetPatchMutation set_ui_asset_image_resource(
+    const GilFile& file,
+    size_t asset_index,
+    uint64_t resource_id,
+    uint64_t parent_entry_id = kDefaultUiAssetsControllerEntryId);
+
+UiAssetPatchMutation set_ui_asset_image_color(
+    const GilFile& file,
+    size_t asset_index,
+    int64_t color,
+    uint64_t parent_entry_id = kDefaultUiAssetsControllerEntryId);
+
+UiAssetPatchMutation set_ui_asset_image_transform(
+    const GilFile& file,
+    size_t asset_index,
+    const UiAssetTransform& transform,
+    uint64_t parent_entry_id = kDefaultUiAssetsControllerEntryId);
+
+UiAssetPatchMutation set_ui_asset_image_layer(
+    const GilFile& file,
+    size_t asset_index,
+    uint64_t layer,
+    uint64_t parent_entry_id = kDefaultUiAssetsControllerEntryId);
+
+UiAssetPatchMutation set_ui_asset_image_name(
+    const GilFile& file,
+    size_t asset_index,
+    const std::string& name,
+    uint64_t parent_entry_id = kDefaultUiAssetsControllerEntryId);
+
+using UiPrimitivePatchSummary = UiAssetPatchSummary;
+using UiPrimitivePatchMutation = UiAssetPatchMutation;
 
 UiPrimitivePatchMutation set_ui_primitive_type(
     const GilFile& file,

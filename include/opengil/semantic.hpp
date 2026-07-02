@@ -50,6 +50,10 @@ struct SceneObjectInfo {
   std::string prefab_name;
   std::optional<uint64_t> asset_id;
   std::optional<uint64_t> prefab_model_asset_id;
+  std::optional<int64_t> color;
+  std::optional<uint64_t> raw_color;
+  std::optional<uint64_t> rgb_color;
+  std::optional<bool> color_enabled;
   SceneObjectTransformInfo transform;
 };
 

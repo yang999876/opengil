@@ -20,12 +20,28 @@
 
 namespace {
 
+std::filesystem::path diff_fixture_path(const char* name) {
+  return std::filesystem::path(OPENGIL_TEST_FIXTURE_DIR).parent_path() / "diff" / name;
+}
+
 std::vector<uint8_t> packed_refs_at_path(std::span<const uint8_t> message, std::span<const uint32_t> path) {
   const auto fields = opengil::parse_owned_fields(message);
   for (const auto& field : fields) {
     if (field.number != path[0]) continue;
     if (path.size() == 1) return field.data;
     return packed_refs_at_path(field.data, path.subspan(1));
+  }
+  OPENGIL_CHECK(false);
+  return {};
+}
+
+std::vector<uint8_t> decoration_refs_at_component(std::span<const uint8_t> entry, uint32_t component_field_number) {
+  const std::array<uint32_t, 1> component_type_path{1};
+  const std::array<uint32_t, 2> refs_path{50, 501};
+  for (const auto& field : opengil::len_fields(entry, component_field_number)) {
+    const auto component = opengil::field_data(entry, field);
+    if (opengil::read_varint_at_path(component, component_type_path) != 40) continue;
+    return packed_refs_at_path(component, refs_path);
   }
   OPENGIL_CHECK(false);
   return {};
@@ -189,6 +205,8 @@ int main() {
   const auto mutation = opengil::import_pixel_png_as_decoration_prefab(file, png, options);
 
   OPENGIL_CHECK(mutation.summary.prefab_id == options.prefab_id);
+  OPENGIL_CHECK(mutation.summary.prefab_name == "pixel-2x2");
+  OPENGIL_CHECK(mutation.summary.preview_object_id);
   OPENGIL_CHECK(mutation.summary.asset_id == options.asset_id);
   OPENGIL_CHECK(mutation.summary.source_pixel_count == 4);
   OPENGIL_CHECK(mutation.summary.decoration_count == 3);
@@ -208,9 +226,20 @@ int main() {
   }
   OPENGIL_CHECK(found);
 
+  const auto preview_objects = opengil::list_preview_objects(changed);
+  bool preview_found = false;
+  for (const auto& preview : preview_objects) {
+    if (preview.ref_id == options.prefab_id) {
+      preview_found = true;
+      OPENGIL_CHECK(preview.object_id == mutation.summary.preview_object_id);
+      OPENGIL_CHECK(preview.asset_id == opengil::EMPTY_MODEL_ASSET_ID);
+      break;
+    }
+  }
+  OPENGIL_CHECK(preview_found);
+
   const auto prefab_entry = top4_entry_by_prefab_id(changed, options.prefab_id);
-  const std::array<uint32_t, 2> refs_path{6, 50};
-  const auto refs = decode_packed(packed_refs_at_path(prefab_entry, refs_path));
+  const auto refs = decode_packed(decoration_refs_at_component(prefab_entry, 6));
   for (const auto id : mutation.summary.prefab_decoration_ids) {
     OPENGIL_CHECK(std::find(refs.begin(), refs.end(), id) != refs.end());
   }
@@ -235,13 +264,27 @@ int main() {
 
   const auto first_decoration = top27_prefab_decoration_by_id(merged_changed, merged_mutation.summary.prefab_decoration_ids[0]);
   const std::array<uint32_t, 4> pos_x_path{5, 11, 1, 1};
+  const std::array<uint32_t, 4> pos_y_path{5, 11, 1, 2};
   const std::array<uint32_t, 4> pos_z_path{5, 11, 1, 3};
   const std::array<uint32_t, 4> scale_x_path{5, 11, 3, 1};
+  const std::array<uint32_t, 4> scale_y_path{5, 11, 3, 2};
   const std::array<uint32_t, 4> scale_z_path{5, 11, 3, 3};
-  OPENGIL_CHECK(fixed32_at_path(first_decoration, pos_x_path) == 0.125f);
-  OPENGIL_CHECK(fixed32_at_path(first_decoration, pos_z_path) == 0.125f);
+  const std::array<uint32_t, 3> color_enabled_path{5, 32, 1};
+  const std::array<uint32_t, 3> color_raw_path{5, 32, 3};
+  const std::array<uint32_t, 3> color_rgb_path{5, 32, 5};
+  const std::array<uint32_t, 3> color_extra_path{5, 32, 9};
+  const std::array<uint32_t, 3> collision_path{5, 15, 1};
+  OPENGIL_CHECK(fixed32_at_path(first_decoration, pos_x_path) == -0.125f);
+  OPENGIL_CHECK(!fixed32_at_path(first_decoration, pos_y_path));
+  OPENGIL_CHECK(!fixed32_at_path(first_decoration, pos_z_path));
   OPENGIL_CHECK(fixed32_at_path(first_decoration, scale_x_path) == 0.5f);
-  OPENGIL_CHECK(fixed32_at_path(first_decoration, scale_z_path) == 0.5f);
+  OPENGIL_CHECK(fixed32_at_path(first_decoration, scale_y_path) == 0.5f);
+  OPENGIL_CHECK(fixed32_at_path(first_decoration, scale_z_path) == 0.25f);
+  OPENGIL_CHECK(opengil::read_varint_at_path(first_decoration, color_enabled_path) == 1);
+  OPENGIL_CHECK(opengil::read_varint_at_path(first_decoration, color_raw_path) == 0xffff0000ull);
+  OPENGIL_CHECK(opengil::read_varint_at_path(first_decoration, color_rgb_path) == 0x00ff0000ull);
+  OPENGIL_CHECK(!opengil::read_varint_at_path(first_decoration, color_extra_path));
+  OPENGIL_CHECK(!opengil::read_varint_at_path(first_decoration, collision_path));
 
   options.prefab_id = 1077939002;
   options.merge_same_color_rects = false;
@@ -250,6 +293,21 @@ int main() {
   OPENGIL_CHECK(unmerged_mutation.summary.source_pixel_count == 6);
   OPENGIL_CHECK(unmerged_mutation.summary.decoration_count == 5);
   OPENGIL_CHECK(unmerged_mutation.summary.prefab_decoration_ids.size() == 5);
+
+  const auto file_with_tab = opengil::load_gil_file(diff_fixture_path("1create_a_tab.gil"));
+  opengil::PixelDecorationImportOptions tab_options;
+  tab_options.prefab_id = 1077939003;
+  tab_options.asset_id = 20001220;
+  tab_options.target_tab_id = 3;
+  const auto tabbed_mutation = opengil::import_pixel_png_as_decoration_prefab(file_with_tab, png, tab_options);
+  OPENGIL_CHECK(tabbed_mutation.summary.target_tab_id == 3);
+  OPENGIL_CHECK(tabbed_mutation.summary.target_tab_name == "Custom Tab_1");
+  const auto tabbed_changed = load_mutation_as_file(tabbed_mutation);
+  OPENGIL_CHECK(opengil::validate_gil(tabbed_changed).ok);
+  const auto prefab_tabs = opengil::list_prefab_tabs(tabbed_changed, tab_options.prefab_id);
+  OPENGIL_CHECK(prefab_tabs.size() == 1);
+  OPENGIL_CHECK(prefab_tabs[0].id == 3);
+  OPENGIL_CHECK(prefab_tabs[0].name == "Custom Tab_1");
 
   return 0;
 }

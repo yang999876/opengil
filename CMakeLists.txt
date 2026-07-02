@@ -146,6 +146,9 @@ add_test(NAME opengil_ui_generated_tests COMMAND opengil_ui_generated_tests)
 
 add_executable(opengil_ui_pixel_import_tests tests/unit/test_ui_pixel_import_ops.cpp)
 target_link_libraries(opengil_ui_pixel_import_tests PRIVATE opengil_core)
+target_compile_definitions(opengil_ui_pixel_import_tests PRIVATE
+  OPENGIL_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests"
+)
 add_test(NAME opengil_ui_pixel_import_tests COMMAND opengil_ui_pixel_import_tests)
 
 add_executable(opengil_pixel_decoration_import_tests tests/unit/test_pixel_decoration_import_ops.cpp)
@@ -189,6 +192,14 @@ add_test(NAME opengil_cli_list_scene_objects_fixture
 
 add_test(NAME opengil_cli_list_preview_objects_fixture
   COMMAND opengil list-preview-objects --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+)
+
+add_test(NAME opengil_cli_set_scene_object_color_dry_run
+  COMMAND opengil set-scene-object-color
+    --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/test1.gil
+    --object-id 1086324737
+    --color -16776961
+    --dry-run
 )
 
 add_test(NAME opengil_cli_ui_delete_dry_run

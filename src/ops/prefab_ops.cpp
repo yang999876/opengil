@@ -542,6 +542,272 @@ std::vector<uint8_t> build_prefab_mapping(uint64_t prefab_id) {
   });
 }
 
+std::vector<uint8_t> build_prefab_tab_entry(const std::string& name, uint64_t tab_id) {
+  return rebuild_message({
+      make_len_field(1, std::vector<uint8_t>(name.begin(), name.end())),
+      make_varint_field(3, tab_id),
+  });
+}
+
+std::vector<uint8_t> build_named_tab_root_entry(const std::string& name, uint64_t tab_id) {
+  return rebuild_message({
+      make_len_field(1, std::vector<uint8_t>(name.begin(), name.end())),
+      make_varint_field(3, tab_id),
+  });
+}
+
+std::vector<uint8_t> build_prefab_tab_default_container() {
+  return rebuild_message({
+      make_len_field(2, build_named_tab_root_entry("root", 1)),
+      make_len_field(3, build_named_tab_root_entry("Uncategorized Tab", 2)),
+  });
+}
+
+bool is_prefab_tab_default_container(const OwnedField& field) {
+  if (field.number != 1 || field.wire != 2) return false;
+  const std::array<uint32_t, 1> category_path{1};
+  if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), category_path)) return false;
+  const std::array<uint32_t, 2> root_name_path{2, 1};
+  const std::array<uint32_t, 2> root_id_path{2, 3};
+  const std::array<uint32_t, 2> uncategorized_name_path{3, 1};
+  const std::array<uint32_t, 2> uncategorized_id_path{3, 3};
+  const auto root_name = read_string_path(std::span<const uint8_t>(field.data.data(), field.data.size()), root_name_path);
+  const auto root_id = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), root_id_path);
+  const auto uncategorized_name = read_string_path(std::span<const uint8_t>(field.data.data(), field.data.size()), uncategorized_name_path);
+  const auto uncategorized_id = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), uncategorized_id_path);
+  return root_name && normalize_visible_text(*root_name) == "root" &&
+         root_id == 1 &&
+         uncategorized_name && normalize_visible_text(*uncategorized_name) == "Uncategorized Tab" &&
+         uncategorized_id == 2;
+}
+
+struct TabMappingLocation {
+  std::optional<uint64_t> tab_id;
+  std::string tab_name;
+};
+
+bool mapping_targets_prefab(const OwnedField& field, uint64_t prefab_id) {
+  if (field.number != 5 || field.wire != 2) return false;
+  const std::array<uint32_t, 1> mapping_type_path{1};
+  const std::array<uint32_t, 1> mapping_target_path{2};
+  const auto type = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), mapping_type_path);
+  const auto target = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), mapping_target_path);
+  return type == 100 && target == prefab_id;
+}
+
+bool child_has_prefab_mapping(std::span<const uint8_t> child, uint64_t prefab_id) {
+  for (const auto& field : parse_owned_fields_or_throw(child, "prefab tab child mapping probe")) {
+    if (mapping_targets_prefab(field, prefab_id)) return true;
+  }
+  return false;
+}
+
+std::vector<OwnedField> remove_prefab_mappings_from_fields(
+    std::vector<OwnedField> fields,
+    uint64_t prefab_id,
+    bool& changed) {
+  std::vector<OwnedField> next;
+  next.reserve(fields.size());
+  for (auto& field : fields) {
+    if (mapping_targets_prefab(field, prefab_id)) {
+      changed = true;
+      continue;
+    }
+    next.push_back(std::move(field));
+  }
+  return next;
+}
+
+uint64_t next_prefab_tab_id(std::span<const uint8_t> top6) {
+  uint64_t max_id = 2;
+  const std::array<uint32_t, 1> category_path{1};
+  const std::array<uint32_t, 1> id_path{3};
+  for (const auto& field : len_fields(top6, 1)) {
+    const auto entry = field_data(top6, field);
+    if (read_varint_path(entry, category_path) != 6) continue;
+    for (const auto& entry_field : parse_owned_fields_or_throw(entry, "prefab tab id scan category")) {
+      if (entry_field.wire != 2) continue;
+      if (auto id = read_varint_path(std::span<const uint8_t>(entry_field.data.data(), entry_field.data.size()), id_path)) {
+        max_id = std::max(max_id, *id);
+      }
+      for (const auto& child : len_fields(entry_field.data, 4)) {
+        const auto child_data = field_data(entry_field.data, child);
+        if (auto id = read_varint_path(child_data, id_path)) max_id = std::max(max_id, *id);
+      }
+    }
+  }
+  return max_id + 1;
+}
+
+std::string prefab_tab_name_or_throw(const GilFile& file, uint64_t tab_id) {
+  for (const auto& tab : list_tabs(file)) {
+    if (tab.id && *tab.id == tab_id) return tab.name;
+  }
+  throw std::runtime_error("tab id not found");
+}
+
+uint64_t prefab_tab_id_or_throw(const GilFile& file, const std::string& tab_name) {
+  for (const auto& tab : list_tabs(file)) {
+    if (tab.name == tab_name && tab.id) return *tab.id;
+  }
+  throw std::runtime_error("tab name not found");
+}
+
+std::vector<uint8_t> create_prefab_tab_top6(
+    std::span<const uint8_t> top6,
+    const std::string& tab_name,
+    uint64_t tab_id) {
+  if (tab_name.empty()) throw std::runtime_error("tab name is required");
+  auto fields = parse_owned_fields_or_throw(top6, "prefab tab create top6");
+  bool changed = false;
+  const std::array<uint32_t, 1> category_path{1};
+  const std::array<uint32_t, 1> tab_id_path{3};
+  const std::array<uint32_t, 1> tab_name_path{1};
+
+  for (auto& field : fields) {
+    if (changed || field.number != 1 || field.wire != 2) continue;
+    const auto entry = std::span<const uint8_t>(field.data.data(), field.data.size());
+    if (read_varint_path(entry, category_path) != 6) continue;
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "prefab tab create category");
+    for (auto& entry_field : entry_fields) {
+      if (changed || entry_field.number != 2 || entry_field.wire != 2) continue;
+      auto root_fields = parse_owned_fields_or_throw(entry_field.data, "prefab tab create root");
+      for (const auto& root_field : root_fields) {
+        if (root_field.number != 4 || root_field.wire != 2) continue;
+        const auto child = std::span<const uint8_t>(root_field.data.data(), root_field.data.size());
+        if (read_varint_path(child, tab_id_path) == tab_id) throw std::runtime_error("tab id already exists");
+        if (auto name = read_string_path(child, tab_name_path); name && normalize_visible_text(*name) == tab_name) {
+          throw std::runtime_error("tab name already exists");
+        }
+      }
+      root_fields.push_back(make_len_field(4, build_prefab_tab_entry(tab_name, tab_id)));
+      entry_field.data = rebuild_message(root_fields);
+      field.data = rebuild_message(entry_fields);
+      changed = true;
+    }
+  }
+  if (!changed) throw std::runtime_error("prefab tab root not found");
+  if (std::none_of(fields.begin(), fields.end(), is_prefab_tab_default_container)) {
+    fields.push_back(make_len_field(1, build_prefab_tab_default_container()));
+  }
+  return rebuild_message(fields);
+}
+
+std::vector<uint8_t> delete_prefab_tab_top6(
+    std::span<const uint8_t> top6,
+    const std::optional<uint64_t>& tab_id,
+    const std::string& tab_name,
+    PrefabTabSummary& summary) {
+  auto fields = parse_owned_fields_or_throw(top6, "prefab tab delete top6");
+  bool changed = false;
+  const std::array<uint32_t, 1> category_path{1};
+  const std::array<uint32_t, 1> tab_id_path{3};
+  const std::array<uint32_t, 1> tab_name_path{1};
+
+  for (auto& field : fields) {
+    if (changed || field.number != 1 || field.wire != 2) continue;
+    const auto entry = std::span<const uint8_t>(field.data.data(), field.data.size());
+    if (read_varint_path(entry, category_path) != 6) continue;
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "prefab tab delete category");
+    for (auto& entry_field : entry_fields) {
+      if (changed || entry_field.number != 2 || entry_field.wire != 2) continue;
+      auto root_fields = parse_owned_fields_or_throw(entry_field.data, "prefab tab delete root");
+      std::vector<OwnedField> next_root;
+      for (auto& root_field : root_fields) {
+        if (root_field.number == 4 && root_field.wire == 2) {
+          const auto child = std::span<const uint8_t>(root_field.data.data(), root_field.data.size());
+          const auto id = read_varint_path(child, tab_id_path);
+          const auto name = read_string_path(child, tab_name_path);
+          const bool hit_by_id = tab_id && id == *tab_id;
+          const bool hit_by_name = !tab_id && name && normalize_visible_text(*name) == tab_name;
+          if (hit_by_id || hit_by_name) {
+            summary.tab_id = id;
+            summary.tab_name = name ? normalize_visible_text(*name) : "";
+            changed = true;
+            continue;
+          }
+        }
+        next_root.push_back(std::move(root_field));
+      }
+      entry_field.data = rebuild_message(next_root);
+      field.data = rebuild_message(entry_fields);
+    }
+  }
+  if (!changed) throw std::runtime_error(tab_id ? "tab id not found" : "tab name not found");
+  return rebuild_message(fields);
+}
+
+std::vector<uint8_t> move_prefab_top6(
+    std::span<const uint8_t> top6,
+    uint64_t prefab_id,
+    const std::optional<uint64_t>& target_tab_id,
+    const std::string& target_tab_name,
+    PrefabTabSummary& summary) {
+  auto fields = parse_owned_fields_or_throw(top6, "prefab tab move top6");
+  bool target_found = !target_tab_id && target_tab_name.empty();
+  bool changed = false;
+  bool added = false;
+  const std::array<uint32_t, 1> category_path{1};
+  const std::array<uint32_t, 1> tab_id_path{3};
+  const std::array<uint32_t, 1> tab_name_path{1};
+
+  for (auto& field : fields) {
+    if (field.number != 1 || field.wire != 2) continue;
+    const auto entry = std::span<const uint8_t>(field.data.data(), field.data.size());
+    if (read_varint_path(entry, category_path) != 6) continue;
+    auto entry_fields = parse_owned_fields_or_throw(field.data, "prefab tab move category");
+    for (auto& entry_field : entry_fields) {
+      if (entry_field.wire != 2) continue;
+      if (entry_field.number == 3) {
+        auto uncategorized_fields = parse_owned_fields_or_throw(entry_field.data, "prefab tab move uncategorized");
+        if (child_has_prefab_mapping(entry_field.data, prefab_id) && !summary.source_tab_id) {
+          summary.source_tab_id = 2;
+          summary.source_tab_name = "Uncategorized";
+        }
+        uncategorized_fields = remove_prefab_mappings_from_fields(std::move(uncategorized_fields), prefab_id, changed);
+        if (!target_tab_id && target_tab_name.empty()) {
+          uncategorized_fields.push_back(make_len_field(5, build_prefab_mapping(prefab_id)));
+          summary.target_tab_id = 2;
+          summary.target_tab_name = "Uncategorized";
+          added = true;
+        }
+        entry_field.data = rebuild_message(uncategorized_fields);
+      } else if (entry_field.number == 2) {
+        auto root_fields = parse_owned_fields_or_throw(entry_field.data, "prefab tab move root");
+        for (auto& root_field : root_fields) {
+          if (root_field.number != 4 || root_field.wire != 2) continue;
+          auto child_fields = parse_owned_fields_or_throw(root_field.data, "prefab tab move child");
+          const auto child = std::span<const uint8_t>(root_field.data.data(), root_field.data.size());
+          const auto id = read_varint_path(child, tab_id_path);
+          const auto name = read_string_path(child, tab_name_path);
+          const auto normalized_name = name ? normalize_visible_text(*name) : "";
+          if (child_has_prefab_mapping(child, prefab_id) && !summary.source_tab_id) {
+            summary.source_tab_id = id;
+            summary.source_tab_name = normalized_name;
+          }
+          child_fields = remove_prefab_mappings_from_fields(std::move(child_fields), prefab_id, changed);
+          const bool hit_by_id = target_tab_id && id == *target_tab_id;
+          const bool hit_by_name = !target_tab_id && !target_tab_name.empty() && normalized_name == target_tab_name;
+          if (hit_by_id || hit_by_name) {
+            target_found = true;
+            child_fields.push_back(make_len_field(5, build_prefab_mapping(prefab_id)));
+            summary.target_tab_id = id;
+            summary.target_tab_name = normalized_name;
+            added = true;
+          }
+          root_field.data = rebuild_message(child_fields);
+        }
+        entry_field.data = rebuild_message(root_fields);
+      }
+    }
+    field.data = rebuild_message(entry_fields);
+  }
+  if (!target_found) throw std::runtime_error(target_tab_id ? "target tab id not found" : "target tab name not found");
+  if (!added) throw std::runtime_error("target tab mapping was not added");
+  changed = true;
+  return changed ? rebuild_message(fields) : std::vector<uint8_t>(top6.begin(), top6.end());
+}
+
 std::vector<uint8_t> append_mapping_to_category(
     std::span<const uint8_t> top6,
     const std::optional<uint64_t>& target_tab_id,
@@ -784,6 +1050,118 @@ PrefabRenameMutation rename_prefab(const GilFile& file, uint64_t prefab_id, cons
   auto next_payload = replace_top_level_field_data(payload(file), 4, next_top4);
 
   PrefabRenameMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation create_prefab_tab(
+    const GilFile& file,
+    const std::string& tab_name,
+    const std::optional<uint64_t>& tab_id) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+  const uint64_t resolved_tab_id = tab_id.value_or(next_prefab_tab_id(*top6));
+
+  PrefabTabSummary summary;
+  summary.kind = "createPrefabTab";
+  summary.tab_id = resolved_tab_id;
+  summary.tab_name = tab_name;
+
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = create_prefab_tab_top6(*top6, tab_name, resolved_tab_id);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation delete_prefab_tab_by_id(const GilFile& file, uint64_t tab_id) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+
+  PrefabTabSummary summary;
+  summary.kind = "deletePrefabTab";
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = delete_prefab_tab_top6(*top6, tab_id, "", summary);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation delete_prefab_tab(const GilFile& file, const std::string& tab_name) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+
+  PrefabTabSummary summary;
+  summary.kind = "deletePrefabTab";
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = delete_prefab_tab_top6(*top6, std::nullopt, tab_name, summary);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation move_prefab_to_tab_by_id(const GilFile& file, uint64_t prefab_id, uint64_t tab_id) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+
+  PrefabTabSummary summary;
+  summary.kind = "movePrefabToTab";
+  summary.prefab_id = prefab_id;
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = move_prefab_top6(*top6, prefab_id, tab_id, "", summary);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation move_prefab_to_tab(const GilFile& file, uint64_t prefab_id, const std::string& tab_name) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+
+  PrefabTabSummary summary;
+  summary.kind = "movePrefabToTab";
+  summary.prefab_id = prefab_id;
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = move_prefab_top6(*top6, prefab_id, std::nullopt, tab_name, summary);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary = std::move(summary);
+  return mutation;
+}
+
+PrefabTabMutation move_prefab_to_uncategorized(const GilFile& file, uint64_t prefab_id) {
+  const auto top6 = top_level_data(file, 6);
+  if (!top6) throw std::runtime_error("top-level field 6 not found");
+
+  PrefabTabSummary summary;
+  summary.kind = "movePrefabToTab";
+  summary.prefab_id = prefab_id;
+  auto next_payload = std::vector<uint8_t>(payload(file).begin(), payload(file).end());
+  const auto next_top6 = move_prefab_top6(*top6, prefab_id, std::nullopt, "", summary);
+  replace_changed_top_field(next_payload, 6, std::vector<uint8_t>(top6->begin(), top6->end()), next_top6, summary.changed_top_fields);
+
+  PrefabTabMutation mutation;
   mutation.payload = std::move(next_payload);
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);

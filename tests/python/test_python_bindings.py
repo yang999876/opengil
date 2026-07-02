@@ -52,6 +52,7 @@ def main() -> int:
         "set_projectile_motion",
         "set_projectile_motion_from_angle",
         "set_scene_object_asset_id",
+        "set_scene_object_color",
         "set_scene_transform",
         "set_ui_primitive_color",
         "set_ui_primitive_layer",
@@ -98,6 +99,13 @@ def main() -> int:
     assert asset["kind"] == "sceneObjectAsset"
     assert asset["object_id"] == object_id
     assert asset["asset_id"] == 20001221
+
+    color = doc.set_scene_object_color(object_id, -16776961)
+    assert color["kind"] == "sceneObjectColor"
+    assert color["object_id"] == object_id
+    assert color["after"]["color"] == -16776961
+    assert color["after"]["rgb_color"] == 255
+    assert color["after"]["enabled"]
 
     model = doc.set_model_asset_id(1086324737, 20001220)
     assert model["model_asset_id"] == 20001220

@@ -194,7 +194,125 @@ UiPrimitivePatchMutation patch_ui_primitive(
   return mutation;
 }
 
+UiAssetPatchMutation patch_ui_asset_image(
+    const GilFile& file,
+    size_t asset_index,
+    uint64_t parent_entry_id,
+    std::string kind,
+    const std::function<std::vector<uint8_t>(std::span<const uint8_t>)>& patcher) {
+  const auto top9 = top_level_data(file, 9);
+  if (!top9) throw std::runtime_error("top-level field 9 not found");
+
+  const auto before_list = list_ui_assets(file, parent_entry_id);
+  if (asset_index >= before_list.assets.size()) throw std::runtime_error("ui asset index not found");
+  const auto before = before_list.assets[asset_index];
+  if (before.kind != "image") throw std::runtime_error("ui asset is not an image");
+
+  auto fields = parse_owned_fields_or_throw(*top9, "ui top9");
+  if (before.top9_index >= fields.size()) throw std::runtime_error("ui asset top9 index out of range");
+  auto& target = fields[before.top9_index];
+  if (target.number != 502 || target.wire != 2) throw std::runtime_error("ui asset top9 entry is not field 502");
+  target.data = patcher(std::span<const uint8_t>(target.data.data(), target.data.size()));
+
+  auto next_payload = replace_top_level_field_data(payload(file), 9, rebuild_message(fields));
+  auto next_bytes = build_gil_bytes(file.header, next_payload);
+  const auto after_file = file_from_mutation(file, next_bytes);
+  const auto after_list = list_ui_assets(after_file, parent_entry_id);
+  if (asset_index >= after_list.assets.size()) throw std::runtime_error("patched ui asset index not found");
+
+  UiAssetPatchMutation mutation;
+  mutation.payload = std::move(next_payload);
+  mutation.bytes = std::move(next_bytes);
+  mutation.summary.kind = std::move(kind);
+  mutation.summary.asset_index = asset_index;
+  mutation.summary.primitive_index = asset_index;
+  mutation.summary.entry_id = before.entry_id;
+  mutation.summary.before = before;
+  mutation.summary.after = after_list.assets[asset_index];
+  mutation.summary.changed_top_fields = {9};
+  return mutation;
+}
+
 }  // namespace
+
+UiAssetPatchMutation set_ui_asset_image_resource(
+    const GilFile& file,
+    size_t asset_index,
+    uint64_t resource_id,
+    uint64_t parent_entry_id) {
+  return patch_ui_asset_image(file, asset_index, parent_entry_id, "uiAssetsImageSetResource", [resource_id](std::span<const uint8_t> entry) {
+    auto fields = parse_owned_fields_or_throw(entry, "ui asset image entry");
+    const std::array<uint32_t, 4> path{505, 503, 31, 2};
+    set_varint_path(fields, path, resource_id);
+    return rebuild_message(fields);
+  });
+}
+
+UiAssetPatchMutation set_ui_asset_image_color(
+    const GilFile& file,
+    size_t asset_index,
+    int64_t color,
+    uint64_t parent_entry_id) {
+  return patch_ui_asset_image(file, asset_index, parent_entry_id, "uiAssetsImageSetColor", [color](std::span<const uint8_t> entry) {
+    auto fields = parse_owned_fields_or_throw(entry, "ui asset image entry");
+    const std::array<uint32_t, 4> path{505, 503, 31, 4};
+    set_varint_path(fields, path, raw_color_from_signed(color));
+    return rebuild_message(fields);
+  });
+}
+
+UiAssetPatchMutation set_ui_asset_image_transform(
+    const GilFile& file,
+    size_t asset_index,
+    const UiAssetTransform& transform,
+    uint64_t parent_entry_id) {
+  return patch_ui_asset_image(file, asset_index, parent_entry_id, "uiAssetsImageSetTransform", [&transform](std::span<const uint8_t> entry) {
+    auto fields = parse_owned_fields_or_throw(entry, "ui asset image entry");
+    const std::array<uint32_t, 8> scale_x_path{505, 503, 13, 12, 501, 502, 501, 1};
+    const std::array<uint32_t, 8> scale_y_path{505, 503, 13, 12, 501, 502, 501, 2};
+    const std::array<uint32_t, 8> scale_z_path{505, 503, 13, 12, 501, 502, 501, 3};
+    const std::array<uint32_t, 8> pos_x_path{505, 503, 13, 12, 501, 502, 504, 501};
+    const std::array<uint32_t, 8> pos_y_path{505, 503, 13, 12, 501, 502, 504, 502};
+    const std::array<uint32_t, 8> size_w_path{505, 503, 13, 12, 501, 502, 505, 501};
+    const std::array<uint32_t, 8> size_h_path{505, 503, 13, 12, 501, 502, 505, 502};
+    const std::array<uint32_t, 8> rotation_z_path{505, 503, 13, 12, 501, 502, 508, 3};
+    if (transform.scale.x) upsert_fixed32_leaf_path(fields, scale_x_path, *transform.scale.x);
+    if (transform.scale.y) upsert_fixed32_leaf_path(fields, scale_y_path, *transform.scale.y);
+    if (transform.scale.z) upsert_fixed32_leaf_path(fields, scale_z_path, *transform.scale.z);
+    if (transform.position.x) upsert_fixed32_leaf_path(fields, pos_x_path, *transform.position.x);
+    if (transform.position.y) upsert_fixed32_leaf_path(fields, pos_y_path, *transform.position.y);
+    if (transform.size.x) upsert_fixed32_leaf_path(fields, size_w_path, *transform.size.x);
+    if (transform.size.y) upsert_fixed32_leaf_path(fields, size_h_path, *transform.size.y);
+    if (transform.rotation_z) upsert_fixed32_leaf_path(fields, rotation_z_path, *transform.rotation_z);
+    return rebuild_message(fields);
+  });
+}
+
+UiAssetPatchMutation set_ui_asset_image_layer(
+    const GilFile& file,
+    size_t asset_index,
+    uint64_t layer,
+    uint64_t parent_entry_id) {
+  return patch_ui_asset_image(file, asset_index, parent_entry_id, "uiAssetsImageSetLayer", [layer](std::span<const uint8_t> entry) {
+    auto fields = parse_owned_fields_or_throw(entry, "ui asset image entry");
+    const std::array<uint32_t, 5> path{505, 503, 13, 12, 502};
+    upsert_varint_leaf_path(fields, path, layer);
+    return rebuild_message(fields);
+  });
+}
+
+UiAssetPatchMutation set_ui_asset_image_name(
+    const GilFile& file,
+    size_t asset_index,
+    const std::string& name,
+    uint64_t parent_entry_id) {
+  return patch_ui_asset_image(file, asset_index, parent_entry_id, "uiAssetsImageSetName", [&name](std::span<const uint8_t> entry) {
+    auto fields = parse_owned_fields_or_throw(entry, "ui asset image entry");
+    const std::array<uint32_t, 3> path{505, 12, 501};
+    set_len_path(fields, path, string_bytes(name));
+    return rebuild_message(fields);
+  });
+}
 
 UiPrimitivePatchMutation set_ui_primitive_type(
     const GilFile& file,

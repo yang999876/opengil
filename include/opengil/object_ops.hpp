@@ -44,6 +44,27 @@ struct ObjectMutation {
   std::vector<uint32_t> changed_top_fields;
 };
 
+struct ObjectColorSummary {
+  std::string kind;
+  uint64_t object_id = 0;
+  std::optional<int64_t> before_color;
+  std::optional<uint64_t> before_raw_color;
+  std::optional<uint64_t> before_rgb_color;
+  std::optional<bool> before_enabled;
+  int64_t after_color = 0;
+  uint64_t after_raw_color = 0;
+  uint64_t after_rgb_color = 0;
+  bool after_enabled = true;
+  std::vector<uint32_t> changed_top_fields;
+};
+
+struct ObjectColorMutation {
+  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> payload;
+  ObjectColorSummary summary;
+  std::vector<uint32_t> changed_top_fields;
+};
+
 struct CreateSceneObjectOptions {
   std::optional<uint64_t> object_id;
   Transform transform;
@@ -51,10 +72,16 @@ struct CreateSceneObjectOptions {
 
 struct CreatePrefabOptions {
   std::optional<uint64_t> prefab_id;
+  std::optional<std::string> name;
   Transform transform;
 };
 
 struct CreateScenePrefabInstanceOptions {
+  std::optional<uint64_t> object_id;
+  Transform transform;
+};
+
+struct CreatePrefabPreviewOptions {
   std::optional<uint64_t> object_id;
   Transform transform;
 };
@@ -71,9 +98,14 @@ ObjectMutation create_scene_prefab_instance(
     uint64_t asset_id,
     const CreateScenePrefabInstanceOptions& options,
     const GilFile* template_file = nullptr);
+ObjectMutation create_prefab_preview(
+    const GilFile& file,
+    uint64_t prefab_id,
+    const CreatePrefabPreviewOptions& options);
 
 ObjectMutation set_scene_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
 ObjectMutation set_preview_transform(const GilFile& file, uint64_t object_id, const Transform& transform);
 ObjectMutation set_scene_object_asset_id(const GilFile& file, uint64_t object_id, uint64_t asset_id);
+ObjectColorMutation set_scene_object_color(const GilFile& file, uint64_t object_id, int64_t color);
 
 }  // namespace opengil

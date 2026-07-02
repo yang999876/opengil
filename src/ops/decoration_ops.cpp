@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <optional>
 #include <span>
@@ -129,30 +130,68 @@ std::vector<uint8_t> set_packed_varint_list_at_path(
   return rebuild_message(fields);
 }
 
-std::vector<uint8_t> set_prefab_decoration_refs(
-    std::span<const uint8_t> prefab_entry,
+std::vector<uint8_t> build_decoration_ref_payload(const std::vector<uint64_t>& values) {
+  return rebuild_message({
+      make_len_field(501, encode_packed_varints(values)),
+  });
+}
+
+std::vector<uint8_t> build_decoration_ref_component(const std::vector<uint64_t>& values) {
+  return rebuild_message({
+      make_varint_field(1, 40),
+      make_len_field(50, build_decoration_ref_payload(values)),
+  });
+}
+
+std::vector<uint8_t> set_decoration_refs_component(
+    std::span<const uint8_t> entry,
+    uint32_t component_field_number,
     const std::vector<uint64_t>& values) {
-  auto fields = parse_owned_fields_or_throw(prefab_entry, "prefab decoration refs entry");
-  const auto encoded = encode_packed_varints(values);
+  auto fields = parse_owned_fields_or_throw(entry, "decoration refs entry");
 
   for (auto& field : fields) {
-    if (field.number != 6 || field.wire != 2) continue;
-    auto child_fields = parse_owned_fields_or_throw(field.data, "prefab decoration refs block");
-    for (auto& child : child_fields) {
+    if (field.number != component_field_number || field.wire != 2) continue;
+    const std::array<uint32_t, 1> component_type_path{1};
+    if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), component_type_path) != 40) continue;
+
+    auto component_fields = parse_owned_fields_or_throw(field.data, "decoration refs component");
+    bool changed = false;
+    for (auto& child : component_fields) {
       if (child.number != 50 || child.wire != 2) continue;
-      child.data = encoded;
-      field.data = rebuild_message(child_fields);
-      return rebuild_message(fields);
+      auto payload_fields = parse_owned_fields_or_throw(child.data, "decoration refs payload");
+      bool payload_changed = false;
+      for (auto& payload_field : payload_fields) {
+        if (payload_field.number != 501 || payload_field.wire != 2) continue;
+        payload_field.data = encode_packed_varints(values);
+        payload_changed = true;
+        break;
+      }
+      if (!payload_changed) payload_fields.push_back(make_len_field(501, encode_packed_varints(values)));
+      child.data = rebuild_message(payload_fields);
+      changed = true;
+      break;
     }
-    child_fields.push_back(make_len_field(50, encoded));
-    field.data = rebuild_message(child_fields);
+    if (!changed) component_fields.push_back(make_len_field(50, build_decoration_ref_payload(values)));
+    field.data = rebuild_message(component_fields);
     return rebuild_message(fields);
   }
 
-  fields.push_back(make_len_field(6, rebuild_message({
-      make_len_field(50, encoded),
-  })));
+  fields.push_back(make_len_field(component_field_number, build_decoration_ref_component(values)));
   return rebuild_message(fields);
+}
+
+std::vector<uint64_t> read_decoration_refs_component(std::span<const uint8_t> entry, uint32_t component_field_number) {
+  const std::array<uint32_t, 1> component_type_path{1};
+  const std::array<uint32_t, 2> refs_path{50, 501};
+  for (const auto& field : len_fields(entry, component_field_number)) {
+    const auto component = field_data(entry, field);
+    if (read_varint_path(component, component_type_path) != 40) continue;
+    if (const auto refs = read_bytes_at_path(component, std::span<const uint32_t>(refs_path.data(), refs_path.size()))) {
+      return decode_packed_varints(*refs);
+    }
+    return {};
+  }
+  return {};
 }
 
 std::vector<uint8_t> encode_vec3_sparse(const Vec3& value) {
@@ -189,30 +228,73 @@ std::vector<uint8_t> build_transform_section(const Transform& transform) {
   });
 }
 
-std::vector<uint8_t> build_prefab_decoration_entry(
-    uint64_t decoration_id,
-    const DecorationSpec& spec,
-    uint64_t owner_prefab_id) {
+uint64_t raw_color_from_signed(int64_t color) {
+  return static_cast<uint64_t>(static_cast<uint32_t>(color));
+}
+
+uint64_t rgb_color_from_signed(int64_t color) {
+  return raw_color_from_signed(color) & 0x00ffffffull;
+}
+
+std::vector<uint8_t> build_model_color_payload(int64_t color, bool enabled) {
+  std::vector<OwnedField> fields;
+  if (enabled) fields.push_back(make_varint_field(1, 1));
+  fields.push_back(make_varint_field(3, raw_color_from_signed(color)));
+  fields.push_back(make_fixed32_field(4, 100.0f));
+  fields.push_back(make_varint_field(5, rgb_color_from_signed(color)));
+  fields.push_back(make_varint_field(6, 6700));
+  return rebuild_message(fields);
+}
+
+std::vector<uint8_t> build_model_color_component(int64_t color, bool enabled) {
   return rebuild_message({
-      make_varint_field(1, decoration_id),
-      make_varint_field(2, spec.asset_id),
-      make_varint_field(3, 1),
-      make_len_field(4, build_name_block(spec.name)),
-      make_len_field(4, build_owner_block(owner_prefab_id)),
+      make_varint_field(1, 22),
+      make_len_field(32, build_model_color_payload(color, enabled)),
+  });
+}
+
+std::vector<OwnedField> decoration_component_fields(const DecorationSpec& spec) {
+  const auto collision_payload = spec.collision_enabled
+      ? rebuild_message({make_varint_field(1, 1), make_varint_field(2, 1)})
+      : std::vector<uint8_t>{};
+  const int64_t color = spec.color.value_or(-1);
+  std::vector<OwnedField> fields{
       make_len_field(5, rebuild_message({
           make_varint_field(1, 1),
           make_len_field(11, build_transform_section(spec.transform)),
       })),
       make_len_field(5, rebuild_message({
           make_varint_field(1, 5),
-          make_len_field(15, {}),
+          make_len_field(15, collision_payload),
       })),
       make_len_field(5, rebuild_message({
           make_varint_field(1, 2),
           make_len_field(12, {}),
       })),
+      make_len_field(5, build_model_color_component(color, spec.color.has_value())),
+  };
+  return fields;
+}
+
+std::vector<uint8_t> build_prefab_decoration_entry(
+    uint64_t decoration_id,
+    const DecorationSpec& spec,
+    uint64_t owner_prefab_id) {
+  std::vector<OwnedField> fields{
+      make_varint_field(1, decoration_id),
+      make_varint_field(2, spec.asset_id),
+      make_varint_field(3, 1),
+      make_len_field(4, build_name_block(spec.name)),
+      make_len_field(4, build_owner_block(owner_prefab_id)),
+      make_len_field(4, rebuild_message({
+          make_varint_field(1, 111),
+          make_len_field(93, {}),
+      })),
       make_len_field(11, {}),
-  });
+  };
+  const auto components = decoration_component_fields(spec);
+  fields.insert(fields.end() - 1, components.begin(), components.end());
+  return rebuild_message(fields);
 }
 
 std::vector<uint8_t> build_scene_decoration_entry(
@@ -220,27 +302,18 @@ std::vector<uint8_t> build_scene_decoration_entry(
     const DecorationSpec& spec,
     uint64_t owner_object_id,
     uint64_t prefab_decoration_id) {
-  return rebuild_message({
+  std::vector<OwnedField> fields{
       make_varint_field(1, decoration_id),
       make_varint_field(2, spec.asset_id),
       make_len_field(4, build_name_block(spec.name)),
       make_len_field(4, build_owner_block(owner_object_id)),
-      make_len_field(5, rebuild_message({
-          make_varint_field(1, 1),
-          make_len_field(11, build_transform_section(spec.transform)),
-      })),
-      make_len_field(5, rebuild_message({
-          make_varint_field(1, 5),
-          make_len_field(15, {}),
-      })),
-      make_len_field(5, rebuild_message({
-          make_varint_field(1, 2),
-          make_len_field(12, {}),
-      })),
       make_len_field(12, rebuild_message({
           make_varint_field(1, prefab_decoration_id),
       })),
-  });
+  };
+  const auto components = decoration_component_fields(spec);
+  fields.insert(fields.end() - 1, components.begin(), components.end());
+  return rebuild_message(fields);
 }
 
 std::vector<uint8_t> find_repeated_entry(
@@ -285,14 +358,11 @@ void merge_max_entry_id(
 
 uint64_t next_decoration_entry_id(const GilFile& file) {
   std::optional<uint64_t> max_id;
-  for (uint32_t top_field : {4u, 5u, 8u}) {
-    if (const auto top = top_level_data(file, top_field)) merge_max_entry_id(max_id, *top, 1);
-  }
   if (const auto top27 = top_level_data(file, 27)) {
     merge_max_entry_id(max_id, *top27, 1);
     merge_max_entry_id(max_id, *top27, 2);
   }
-  return max_id.value_or(0) + 1;
+  return max_id ? *max_id + 1 : 1073741826ull;
 }
 
 std::vector<uint8_t> replace_repeated_entry(
@@ -313,25 +383,68 @@ std::vector<uint8_t> replace_repeated_entry(
   return rebuild_message(fields);
 }
 
+std::vector<uint8_t> upsert_color_component(std::span<const uint8_t> entry, int64_t color) {
+  auto fields = parse_owned_fields_or_throw(entry, "decoration color patch entry");
+  const std::array<uint32_t, 1> component_type_path{1};
+  for (auto& field : fields) {
+    if (field.number != 5 || field.wire != 2) continue;
+    if (read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), component_type_path) != 22) continue;
+    field.data = build_model_color_component(color, true);
+    return rebuild_message(fields);
+  }
+  fields.push_back(make_len_field(5, build_model_color_component(color, true)));
+  return rebuild_message(fields);
+}
+
+std::vector<uint8_t> set_direct_varint_field(std::span<const uint8_t> entry, uint32_t field_number, uint64_t value) {
+  auto fields = parse_owned_fields_or_throw(entry, "decoration varint patch entry");
+  bool changed = false;
+  for (auto& field : fields) {
+    if (field.number != field_number || field.wire != 0) continue;
+    field.varint = value;
+    changed = true;
+    break;
+  }
+  if (!changed) fields.push_back(make_varint_field(field_number, value));
+  return rebuild_message(fields);
+}
+
+std::vector<uint8_t> patch_linked_top27_entries(
+    std::span<const uint8_t> top27,
+    uint64_t prefab_decoration_id,
+    const std::function<std::vector<uint8_t>(std::span<const uint8_t>)>& patch) {
+  auto fields = parse_owned_fields_or_throw(top27, "decoration top27 patch");
+  const std::array<uint32_t, 1> id_path{1};
+  const std::array<uint32_t, 2> prefab_ref_path{12, 1};
+  bool changed_prefab = false;
+  for (auto& field : fields) {
+    if (field.wire != 2) continue;
+    const auto entry = std::span<const uint8_t>(field.data.data(), field.data.size());
+    const bool is_prefab = field.number == 1 && read_varint_path(entry, id_path) == prefab_decoration_id;
+    const bool is_scene = field.number == 2 && read_varint_path(entry, prefab_ref_path) == prefab_decoration_id;
+    if (!is_prefab && !is_scene) continue;
+    field.data = patch(entry);
+    if (is_prefab) changed_prefab = true;
+  }
+  if (!changed_prefab) throw std::runtime_error("prefab decoration id not found");
+  return rebuild_message(fields);
+}
+
 std::vector<uint8_t> replace_all_scene_entries(
     std::span<const uint8_t> top8,
     const std::map<uint64_t, std::vector<uint64_t>>& scene_decoration_ids_by_object) {
   auto fields = parse_owned_fields_or_throw(top8, "decoration top8");
   bool changed = false;
   const std::array<uint32_t, 1> object_id_path{1};
-  const std::array<uint32_t, 2> packed_path{5, 50};
   for (auto& field : fields) {
     if (field.number != 1 || field.wire != 2) continue;
     const auto object_id = read_varint_path(std::span<const uint8_t>(field.data.data(), field.data.size()), object_id_path);
     if (!object_id) continue;
     const auto it = scene_decoration_ids_by_object.find(*object_id);
     if (it == scene_decoration_ids_by_object.end()) continue;
-    const auto current = read_bytes_at_path(field.data, std::span<const uint32_t>(packed_path.data(), packed_path.size()));
-    if (!current) throw std::runtime_error("scene decoration reference list not found");
-    auto packed = decode_packed_varints(*current);
+    auto packed = read_decoration_refs_component(field.data, 5);
     packed.insert(packed.end(), it->second.begin(), it->second.end());
-    update_reference_count_slot(packed);
-    field.data = set_packed_varint_list_at_path(field.data, std::span<const uint32_t>(packed_path.data(), packed_path.size()), packed);
+    field.data = set_decoration_refs_component(field.data, 5, packed);
     changed = true;
   }
   return changed ? rebuild_message(fields) : std::vector<uint8_t>(top8.begin(), top8.end());
@@ -370,7 +483,8 @@ std::vector<uint8_t> insert_decoration_entries(
 DecorationMutation add_prefab_decorations(
     const GilFile& file,
     uint64_t prefab_id,
-    const std::vector<DecorationSpec>& specs) {
+    const std::vector<DecorationSpec>& specs,
+    const DecorationAddOptions& options) {
   if (specs.empty()) throw std::runtime_error("at least one decoration spec is required");
   for (const auto& spec : specs) {
     if (spec.asset_id == 0) throw std::runtime_error("decoration asset id is required");
@@ -387,9 +501,11 @@ DecorationMutation add_prefab_decorations(
 
   std::vector<std::vector<uint8_t>> scene_entries;
   std::optional<std::vector<uint8_t>> top8_bytes;
-  if (const auto top8 = top_level_data(file, 8)) {
+  if (options.sync_instances) {
+    if (const auto top8 = top_level_data(file, 8)) {
     top8_bytes = std::vector<uint8_t>(top8->begin(), top8->end());
     scene_entries = find_scene_entries(*top8, prefab_id);
+    }
   }
 
   uint64_t next_top27_id = next_decoration_entry_id(file);
@@ -421,12 +537,9 @@ DecorationMutation add_prefab_decorations(
     }
   }
 
-  const std::array<uint32_t, 2> prefab_packed_path{6, 50};
-  const auto prefab_packed_bytes = read_bytes_at_path(prefab_entry, std::span<const uint32_t>(prefab_packed_path.data(), prefab_packed_path.size()));
-  auto prefab_packed = prefab_packed_bytes ? decode_packed_varints(*prefab_packed_bytes) : std::vector<uint64_t>{0, 0};
+  auto prefab_packed = read_decoration_refs_component(prefab_entry, 6);
   prefab_packed.insert(prefab_packed.end(), summary.prefab_decoration_ids.begin(), summary.prefab_decoration_ids.end());
-  update_reference_count_slot(prefab_packed);
-  prefab_entry = set_prefab_decoration_refs(prefab_entry, prefab_packed);
+  prefab_entry = set_decoration_refs_component(prefab_entry, 6, prefab_packed);
 
   std::vector<uint8_t> next_payload(payload(file).begin(), payload(file).end());
   const auto next_top4 = replace_repeated_entry(
@@ -452,6 +565,51 @@ DecorationMutation add_prefab_decorations(
   mutation.payload = std::move(next_payload);
   mutation.bytes = build_gil_bytes(file.header, mutation.payload);
   mutation.summary = std::move(summary);
+  return mutation;
+}
+
+DecorationMutation set_prefab_decoration_asset(
+    const GilFile& file,
+    uint64_t prefab_decoration_id,
+    uint64_t asset_id) {
+  if (asset_id == 0) throw std::runtime_error("decoration asset id is required");
+  const auto top27 = top_level_data(file, 27);
+  if (!top27) throw std::runtime_error("top-level field 27 not found");
+
+  const auto next_top27 = patch_linked_top27_entries(
+      *top27,
+      prefab_decoration_id,
+      [asset_id](std::span<const uint8_t> entry) {
+        return set_direct_varint_field(entry, 2, asset_id);
+      });
+
+  DecorationMutation mutation;
+  mutation.payload = replace_top_level_field_data(payload(file), 27, next_top27);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary.prefab_decoration_ids.push_back(prefab_decoration_id);
+  mutation.summary.changed_top_fields.push_back(27);
+  return mutation;
+}
+
+DecorationMutation set_prefab_decoration_color(
+    const GilFile& file,
+    uint64_t prefab_decoration_id,
+    int64_t color) {
+  const auto top27 = top_level_data(file, 27);
+  if (!top27) throw std::runtime_error("top-level field 27 not found");
+
+  const auto next_top27 = patch_linked_top27_entries(
+      *top27,
+      prefab_decoration_id,
+      [color](std::span<const uint8_t> entry) {
+        return upsert_color_component(entry, color);
+      });
+
+  DecorationMutation mutation;
+  mutation.payload = replace_top_level_field_data(payload(file), 27, next_top27);
+  mutation.bytes = build_gil_bytes(file.header, mutation.payload);
+  mutation.summary.prefab_decoration_ids.push_back(prefab_decoration_id);
+  mutation.summary.changed_top_fields.push_back(27);
   return mutation;
 }
 

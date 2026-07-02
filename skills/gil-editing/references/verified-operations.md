@@ -14,6 +14,12 @@
 - Rename prefab: prefab `4.1.6.11.1` when present, with fallbacks for older observed name paths. This changes `top4` only.
 - Scene transform: replace full transform at `5.1.6.11`.
 - Preview transform: replace full transform at `8.1.6.11`.
+- Scene object model color: upsert component id `22` under `5.1.6`; write
+  `32.1 = 1`, signed ARGB at `32.3`, RGB at `32.5`, and default material
+  constants `32.4 = 100`, `32.6 = 6700`, `32.9 = 6711`.
+- Decoration model color: when a decoration spec has `color`, append the same
+  component id `22` under top27 decoration component field `5`; pixel
+  decoration import derives opaque signed ARGB from visible PNG pixels.
 - UI primitives: list and edit `top9.field502` entries. Generated append builds
   primitive entries from code-owned structure and patches type/color/name/layer/
   transform at creation time. Delete removes selected primitive entries and

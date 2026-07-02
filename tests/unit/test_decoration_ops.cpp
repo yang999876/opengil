@@ -53,22 +53,27 @@ std::vector<uint64_t> decode_packed(std::span<const uint8_t> data) {
   return values;
 }
 
+std::vector<uint8_t> decoration_refs_component(std::initializer_list<uint64_t> ids) {
+  return message({
+      varint_field(1, 40),
+      len_field(50, message({
+          len_field(501, packed_varints(ids)),
+      })),
+  });
+}
+
 opengil::GilFile make_file() {
   const auto top4 = message({
       len_field(1, message({
           varint_field(1, 101),
-          len_field(6, message({
-              len_field(50, packed_varints({0, 5, 1001})),
-          })),
+          len_field(6, decoration_refs_component({1001})),
       })),
   });
   const auto top8 = message({
       len_field(1, message({
           varint_field(1, 201),
           len_field(2, message({varint_field(1, 101)})),
-          len_field(5, message({
-              len_field(50, packed_varints({0, 0})),
-          })),
+          len_field(5, decoration_refs_component({1002})),
       })),
   });
   const auto top27 = message({
@@ -125,6 +130,32 @@ std::vector<uint8_t> bytes_at_path(std::span<const uint8_t> message, std::span<c
   return {};
 }
 
+std::vector<uint8_t> decoration_refs_at_component(std::span<const uint8_t> entry, uint32_t component_field_number) {
+  const std::array<uint32_t, 1> component_type_path{1};
+  const std::array<uint32_t, 2> refs_path{50, 501};
+  for (const auto& field : opengil::len_fields(entry, component_field_number)) {
+    const auto component = opengil::field_data(entry, field);
+    if (opengil::read_varint_at_path(component, component_type_path) != 40) continue;
+    return bytes_at_path(component, refs_path);
+  }
+  OPENGIL_CHECK(false);
+  return {};
+}
+
+std::vector<uint8_t> top27_entry_by_id(const opengil::GilFile& file, uint32_t repeated_field, uint64_t id) {
+  const auto top27 = opengil::top_level_data(file, 27);
+  OPENGIL_CHECK(top27);
+  const std::array<uint32_t, 1> id_path{1};
+  for (const auto& field : opengil::len_fields(*top27, repeated_field)) {
+    const auto entry = opengil::field_data(*top27, field);
+    if (opengil::read_varint_at_path(entry, id_path) == id) {
+      return std::vector<uint8_t>(entry.begin(), entry.end());
+    }
+  }
+  OPENGIL_CHECK(false);
+  return {};
+}
+
 size_t len_count(const opengil::GilFile& file, uint32_t top_field, uint32_t repeated_field) {
   const auto top = opengil::top_level_data(file, top_field);
   OPENGIL_CHECK(top);
@@ -155,17 +186,44 @@ int main() {
   OPENGIL_CHECK(opengil::validate_gil(changed).ok);
 
   const auto prefab_entry = entry_by_id(changed, 4, 101);
-  const std::array<uint32_t, 2> prefab_refs_path{6, 50};
-  const auto prefab_refs = decode_packed(bytes_at_path(prefab_entry, prefab_refs_path));
-  OPENGIL_CHECK((prefab_refs == std::vector<uint64_t>{0, 10, 1001, 1003}));
+  const auto prefab_refs = decode_packed(decoration_refs_at_component(prefab_entry, 6));
+  OPENGIL_CHECK((prefab_refs == std::vector<uint64_t>{1001, 1003}));
 
   const auto scene_entry = entry_by_id(changed, 8, 201);
-  const std::array<uint32_t, 2> scene_refs_path{5, 50};
-  const auto scene_refs = decode_packed(bytes_at_path(scene_entry, scene_refs_path));
-  OPENGIL_CHECK((scene_refs == std::vector<uint64_t>{0, 5, 1004}));
+  const auto scene_refs = decode_packed(decoration_refs_at_component(scene_entry, 5));
+  OPENGIL_CHECK((scene_refs == std::vector<uint64_t>{1002, 1004}));
 
   OPENGIL_CHECK(len_count(changed, 27, 1) == 2);
   OPENGIL_CHECK(len_count(changed, 27, 2) == 2);
+
+  const auto prefab_decoration = top27_entry_by_id(changed, 1, 1003);
+  const std::array<uint32_t, 3> collision_path{5, 15, 1};
+  const std::array<uint32_t, 3> default_color_raw_path{5, 32, 3};
+  const std::array<uint32_t, 3> default_color_enabled_path{5, 32, 1};
+  const std::array<uint32_t, 3> unsupported_color_extra_path{5, 32, 9};
+  OPENGIL_CHECK(!opengil::read_varint_at_path(prefab_decoration, collision_path));
+  OPENGIL_CHECK(opengil::read_varint_at_path(prefab_decoration, default_color_raw_path) == 0xffffffffull);
+  OPENGIL_CHECK(!opengil::read_varint_at_path(prefab_decoration, default_color_enabled_path));
+  OPENGIL_CHECK(!opengil::read_varint_at_path(prefab_decoration, unsupported_color_extra_path));
+
+  opengil::DecorationSpec red_spec;
+  red_spec.asset_id = 20001220;
+  red_spec.name = "Red";
+  red_spec.color = -65536;
+  red_spec.collision_enabled = false;
+  const auto red_mutation = opengil::add_prefab_decorations(changed, 101, {red_spec});
+  const auto red_changed = load_mutation_as_file(red_mutation, "opengil-test-decoration-red.gil");
+  OPENGIL_CHECK(opengil::validate_gil(red_changed).ok);
+
+  const auto red_decoration = top27_entry_by_id(red_changed, 1, red_mutation.summary.prefab_decoration_ids[0]);
+  const std::array<uint32_t, 3> color_enabled_path{5, 32, 1};
+  const std::array<uint32_t, 3> color_raw_path{5, 32, 3};
+  const std::array<uint32_t, 3> color_rgb_path{5, 32, 5};
+  OPENGIL_CHECK(!opengil::read_varint_at_path(red_decoration, collision_path));
+  OPENGIL_CHECK(opengil::read_varint_at_path(red_decoration, color_enabled_path) == 1);
+  OPENGIL_CHECK(opengil::read_varint_at_path(red_decoration, color_raw_path) == 0xffff0000ull);
+  OPENGIL_CHECK(opengil::read_varint_at_path(red_decoration, color_rgb_path) == 0x00ff0000ull);
+  OPENGIL_CHECK(!opengil::read_varint_at_path(red_decoration, unsupported_color_extra_path));
 
   return 0;
 }

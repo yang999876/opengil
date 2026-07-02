@@ -139,26 +139,69 @@ int main() {
   const auto changed = mutated_file(file, mutation);
   OPENGIL_CHECK(opengil::validate_gil(changed).ok);
 
-  const auto list = opengil::list_ui_primitives(changed, 1073741855);
-  OPENGIL_CHECK(list.primitives.size() == 3);
-  OPENGIL_CHECK(list.primitives[0].name == "pixel_0_0");
-  OPENGIL_CHECK(list.primitives[0].color == -65536);
-  OPENGIL_CHECK(list.primitives[0].transform.position.x == 0.0);
-  OPENGIL_CHECK(list.primitives[0].transform.position.y == 0.0);
-  OPENGIL_CHECK(list.primitives[0].transform.size.x == 8.0);
-  OPENGIL_CHECK(list.primitives[0].transform.size.y == 8.0);
-  OPENGIL_CHECK(list.primitives[1].name == "pixel_1_0");
-  OPENGIL_CHECK(list.primitives[1].color == -2147418368);
-  OPENGIL_CHECK(list.primitives[1].transform.position.x == 8.0);
-  OPENGIL_CHECK(list.primitives[1].transform.position.y == 0.0);
-  OPENGIL_CHECK(list.primitives[2].name == "pixel_0_1");
-  OPENGIL_CHECK(list.primitives[2].color == -16776961);
-  OPENGIL_CHECK(list.primitives[2].transform.position.x == 0.0);
-  OPENGIL_CHECK(list.primitives[2].transform.position.y == 8.0);
-  OPENGIL_CHECK(mutation.summary.kind == "importPixelPngUiPrimitives");
-  OPENGIL_CHECK(mutation.summary.primitive_count == 3);
+  const auto root_assets = opengil::list_ui_assets(changed, 1073741855);
+  OPENGIL_CHECK(root_assets.assets.size() == 1);
+  OPENGIL_CHECK(root_assets.assets[0].kind == "group");
+  OPENGIL_CHECK(root_assets.assets[0].name == "opengil-ui-pixel-import-2x2");
+  OPENGIL_CHECK(root_assets.assets[0].transform.position.x == 4.0);
+  OPENGIL_CHECK(root_assets.assets[0].transform.position.y == 4.0);
+  OPENGIL_CHECK(root_assets.assets[0].transform.size.x == 16.0);
+  OPENGIL_CHECK(root_assets.assets[0].transform.size.y == 16.0);
+  OPENGIL_CHECK(root_assets.assets[0].mask_size.x == 16.0);
+  OPENGIL_CHECK(root_assets.assets[0].mask_size.y == 16.0);
+  OPENGIL_CHECK(root_assets.assets[0].entry_id.has_value());
+
+  const auto pixels = opengil::list_ui_assets(changed, *root_assets.assets[0].entry_id);
+  OPENGIL_CHECK(pixels.assets.size() == 3);
+  OPENGIL_CHECK(pixels.assets[0].name == "pixel_0_0");
+  OPENGIL_CHECK(pixels.assets[0].color == -65536);
+  OPENGIL_CHECK(pixels.assets[0].transform.position.x == -4.0);
+  OPENGIL_CHECK(pixels.assets[0].transform.position.y == 4.0);
+  OPENGIL_CHECK(pixels.assets[0].transform.size.x == 8.0);
+  OPENGIL_CHECK(pixels.assets[0].transform.size.y == 8.0);
+  OPENGIL_CHECK(pixels.assets[1].name == "pixel_1_0");
+  OPENGIL_CHECK(pixels.assets[1].color == -2147418368);
+  OPENGIL_CHECK(pixels.assets[1].transform.position.x == 4.0);
+  OPENGIL_CHECK(pixels.assets[1].transform.position.y == 4.0);
+  OPENGIL_CHECK(pixels.assets[2].name == "pixel_0_1");
+  OPENGIL_CHECK(pixels.assets[2].color == -16776961);
+  OPENGIL_CHECK(pixels.assets[2].transform.position.x == -4.0);
+  OPENGIL_CHECK(pixels.assets[2].transform.position.y == -4.0);
+  OPENGIL_CHECK(mutation.summary.kind == "importPixelPngUiAssetGroup");
+  OPENGIL_CHECK(mutation.summary.primitive_count == 1);
   OPENGIL_CHECK((mutation.summary.changed_top_fields == std::vector<uint32_t>{9}));
   OPENGIL_CHECK(throws_for_non_png(file));
+
+  opengil::UiPixelImportOptions fixture_options;
+  fixture_options.pixel_size = 8.0;
+  fixture_options.target_controller_entry_id = 1073741855;
+  const auto fixture_mutation = opengil::import_pixel_png_as_ui_primitives(
+      make_file(),
+      std::filesystem::path(OPENGIL_TEST_DIR) / "test.png",
+      fixture_options);
+  const auto fixture_changed = mutated_file(make_file(), fixture_mutation);
+  OPENGIL_CHECK(opengil::validate_gil(fixture_changed).ok);
+
+  const auto fixture_root_assets = opengil::list_ui_assets(fixture_changed, 1073741855);
+  OPENGIL_CHECK(fixture_root_assets.assets.size() == 1);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].kind == "group");
+  OPENGIL_CHECK(fixture_root_assets.assets[0].name == "test");
+  OPENGIL_CHECK(fixture_root_assets.assets[0].transform.position.x == 60.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].transform.position.y == 112.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].transform.size.x == 96.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].transform.size.y == 104.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].mask_size.x == 96.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].mask_size.y == 104.0);
+  OPENGIL_CHECK(fixture_root_assets.assets[0].entry_id.has_value());
+
+  const auto fixture_pixels = opengil::list_ui_assets(fixture_changed, *fixture_root_assets.assets[0].entry_id);
+  OPENGIL_CHECK(fixture_pixels.assets.size() == 132);
+  OPENGIL_CHECK(fixture_pixels.assets[0].name == "pixel_3_2");
+  OPENGIL_CHECK(fixture_pixels.assets[0].transform.position.x == -36.0);
+  OPENGIL_CHECK(fixture_pixels.assets[0].transform.position.y == 48.0);
+  OPENGIL_CHECK(fixture_pixels.assets.back().name == "pixel_13_14");
+  OPENGIL_CHECK(fixture_pixels.assets.back().transform.position.x == 44.0);
+  OPENGIL_CHECK(fixture_pixels.assets.back().transform.position.y == -48.0);
 
   return 0;
 }

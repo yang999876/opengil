@@ -54,6 +54,13 @@ std::vector<uint8_t> controller_entry(uint64_t controller_id, std::initializer_l
   });
 }
 
+std::vector<uint8_t> controller_entry_without_child_list(uint64_t controller_id) {
+  return message({
+      varint_field(501, controller_id),
+      len_field(12, message({len_field(501, string_bytes("empty_controller"))})),
+  });
+}
+
 opengil::GilFile make_file() {
   const auto top9 = message({
       len_field(502, controller_entry(opengil::kDefaultUiPrimitiveControllerEntryId, {})),
@@ -73,6 +80,26 @@ opengil::GilFile make_file() {
 
   opengil::GilFile file;
   file.path = "synthetic-ui-generated.gil";
+  file.header = header;
+  file.bytes = opengil::build_gil_bytes(header, payload);
+  return file;
+}
+
+opengil::GilFile make_file_without_controller_child_list() {
+  const auto top9 = message({
+      len_field(502, controller_entry_without_child_list(1073741840)),
+      len_field(502, message({varint_field(501, 1073741841), varint_field(7, 8)})),
+  });
+  const auto payload = message({
+      len_field(9, top9),
+      len_field(46, message({varint_field(1, 2)})),
+  });
+
+  opengil::GilHeader header;
+  header.schema = 1;
+
+  opengil::GilFile file;
+  file.path = "synthetic-ui-generated-empty-controller.gil";
   file.header = header;
   file.bytes = opengil::build_gil_bytes(header, payload);
   return file;
@@ -198,9 +225,33 @@ int main() {
   OPENGIL_CHECK(list.primitives[1].transform.rotation_z == 45.0);
 
   OPENGIL_CHECK((mutation.summary.entry_ids == std::vector<uint64_t>{1073741842, 1073741843}));
-  OPENGIL_CHECK(mutation.summary.kind == "appendGeneratedUiPrimitives");
+  OPENGIL_CHECK(mutation.summary.kind == "createUiAssetImages");
   OPENGIL_CHECK(mutation.summary.primitive_count == 2);
   OPENGIL_CHECK((mutation.summary.changed_top_fields == std::vector<uint32_t>{9}));
+
+  const auto empty_controller_file = make_file_without_controller_child_list();
+  opengil::UiGeneratedPrimitiveSpec first_rect;
+  first_rect.primitive_type_id = opengil::kUiPrimitiveRectangle;
+  first_rect.x = 1.0;
+  first_rect.y = 2.0;
+  first_rect.width = 3.0;
+  first_rect.height = 4.0;
+  first_rect.color = -16776961;
+  first_rect.name = "first_rect";
+  opengil::UiGeneratedPrimitiveOptions options;
+  options.target_controller_entry_id = 1073741840;
+  const auto first_mutation = opengil::append_generated_ui_primitives(
+      empty_controller_file,
+      std::span<const opengil::UiGeneratedPrimitiveSpec>(&first_rect, 1),
+      options);
+  const auto first_changed = mutated_file(empty_controller_file, first_mutation);
+  OPENGIL_CHECK(opengil::validate_gil(first_changed).ok);
+  const auto first_list = opengil::list_ui_primitives(first_changed, 1073741840);
+  OPENGIL_CHECK(first_list.primitives.size() == 1);
+  OPENGIL_CHECK(first_list.primitives[0].name == "first_rect");
+  OPENGIL_CHECK(first_list.primitives[0].color == -16776961);
+  OPENGIL_CHECK(first_mutation.summary.target_controller_entry_id == 1073741840);
+  OPENGIL_CHECK(first_mutation.summary.primitive_count == 1);
 
   OPENGIL_CHECK(throws_for_empty(file));
   OPENGIL_CHECK(throws_for_bad_type(file));

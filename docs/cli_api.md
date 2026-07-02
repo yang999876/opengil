@@ -142,6 +142,7 @@ Prefab / 模型 / Tab：
 - `create-scene-prefab-instance`
 - `set-scene-transform`
 - `set-preview-transform`
+- `set-scene-object-color`
 
 NodeGraph 与 Projectile：
 
@@ -373,6 +374,10 @@ opengil list-scene-objects --input input.gil
 - `result.items[].objectId`
 - `result.items[].refId`
 - `result.items[].assetId`
+- `result.items[].color`
+- `result.items[].rawColor`
+- `result.items[].rgbColor`
+- `result.items[].colorEnabled`
 - `result.items[].transform`
 
 ### `list-preview-objects`
@@ -396,6 +401,10 @@ opengil list-preview-objects --input input.gil
 - `result.items[].objectId`
 - `result.items[].prefabName`
 - `result.items[].assetId`
+- `result.items[].color`
+- `result.items[].rawColor`
+- `result.items[].rgbColor`
+- `result.items[].colorEnabled`
 - `result.items[].transform`
 
 ### `list-nodegraphs`
@@ -760,6 +769,36 @@ opengil set-preview-transform --input input.gil --output output.gil --object-id 
 - `result.transform`
 - `result.changedTopFields`
 
+### `set-scene-object-color`
+
+用途：修改 scene 对象上可着色模型的颜色，并启用颜色组件。
+
+参数：
+
+- 必填：`--input <path>`
+- 必填：`--object-id <u64>`
+- 必填：`--color <i64>`，signed ARGB，例如红色 `-65536`、蓝色 `-16776961`
+- 可选：`--output <path>`
+- 可选：`--in-place`
+- 可选：`--dry-run`
+- 可选：`--report <path>`
+
+示例：
+
+```powershell
+opengil set-scene-object-color --input input.gil --output output.gil --object-id 1077936131 --color -16776961
+```
+
+返回重点：
+
+- `result.kind`
+- `result.objectId`
+- `result.before.color`
+- `result.before.enabled`
+- `result.after.color`
+- `result.after.enabled`
+- `result.changedTopFields`
+
 ## 2.5 NodeGraph 与 Projectile
 
 ### `attach-nodegraph`
@@ -1022,6 +1061,7 @@ opengil custom-vars sync-tab --input input.gil --output output.gil --source-pref
 - 必填：`--prefab-id <u64>`
 - 必填：`--asset-id <u64>`
 - 必填：`--name <string>`
+- 可选：`--color <i64>`，signed ARGB；传入后写入可着色模型颜色组件
 - 可选：3D transform 参数
 - 可选：`--output <path>`
 - 可选：`--in-place`
@@ -1031,7 +1071,7 @@ opengil custom-vars sync-tab --input input.gil --output output.gil --source-pref
 示例：
 
 ```powershell
-opengil decoration add --input input.gil --output output.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --pos-y 1.9 --scale-x 0.3 --scale-y 0.04 --scale-z 0.3
+opengil decoration add --input input.gil --output output.gil --prefab-id 1077936385 --asset-id 20001220 --name Deco --color -65536 --pos-y 1.9 --scale-x 0.3 --scale-y 0.04 --scale-z 0.3
 ```
 
 返回重点：
@@ -1114,7 +1154,7 @@ opengil attachment from-decoration --input input.gil --output output.gil --prefa
 
 ### `pixel-art import-decoration`
 
-用途：从 PNG 生成一个像素风 decoration prefab。
+用途：从 PNG 生成一个像素风 decoration prefab；每个可见像素会写入对应的不透明 signed ARGB 颜色。
 
 参数：
 
@@ -1132,12 +1172,16 @@ opengil attachment from-decoration --input input.gil --output output.gil --prefa
 
 ```powershell
 opengil pixel-art import-decoration --input input.gil --output output.gil --png pixel.png --prefab-id 1077939001 --asset-id 20001220 --pixel-size 0.25
+opengil pixel-art import-decoration --input input.gil --output output.gil --png pixel.png --prefab-id 1077939001 --asset-id 10009001 --tab-id 3 --prefab-only
 ```
 
 返回重点：
 
 - `result.kind`
 - `result.prefabId`
+- `result.prefabName`
+- `result.previewObjectId`
+- `result.targetTab`
 - `result.assetId`
 - `result.sourcePixelCount`
 - `result.decorationCount`
@@ -1357,17 +1401,17 @@ opengil ui delete --input input.gil --output output.gil --target-controller-entr
 - 必填：`--input <path>`
 - 必填：`--png <path>`
 - 必填：`--pixel-size <number>`
+- 可选：`--controller-entry-id <u64>` 或 `--target-controller-entry-id <u64>`，默认 `1073741855`
 - 可选：`--output <path>`
 - 可选：`--in-place`
 - 可选：`--dry-run`
 - 可选：`--report <path>`
 
-写入目标固定为默认 controller entry `1073741855`。
-
 示例：
 
 ```powershell
 opengil ui import-pixel --input input.gil --output output.gil --png pixel.png --pixel-size 8
+opengil ui import-pixel --input input.gil --output output.gil --png pixel.png --pixel-size 8 --controller-entry-id 1073741840
 ```
 
 返回重点：

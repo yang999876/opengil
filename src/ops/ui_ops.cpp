@@ -35,9 +35,9 @@ std::optional<std::string> read_string_path(std::span<const uint8_t> message, co
 }
 
 bool is_ui_primitive_type(uint64_t value) {
-  return value == kUiPrimitiveRectangle ||
-         value == kUiPrimitiveEllipse ||
-         value == kUiPrimitiveTriangle;
+  return value == kUiAssetImageRectResourceId ||
+         value == kUiAssetImageCircleResourceId ||
+         value == kUiAssetImageTriangleResourceId;
 }
 
 std::optional<std::vector<uint8_t>> direct_len_data(std::span<const uint8_t> message, uint32_t field_number) {
@@ -100,6 +100,10 @@ std::vector<uint64_t> primitive_entry_ids_from_controller(std::span<const uint8_
   return {};
 }
 
+std::vector<uint64_t> child_entry_ids_from_parent(std::span<const uint8_t> top9, uint64_t parent_entry_id) {
+  return primitive_entry_ids_from_controller(top9, parent_entry_id);
+}
+
 std::vector<PrimitiveEntry> primitive_entries_from_top9(std::span<const uint8_t> top9) {
   std::vector<PrimitiveEntry> entries;
   std::vector<Field> fields;
@@ -114,6 +118,27 @@ std::vector<PrimitiveEntry> primitive_entries_from_top9(std::span<const uint8_t>
     PrimitiveEntry item;
     item.top9_index = i;
     item.entry_id = top9_entry_id(entry);
+    item.data.assign(entry.begin(), entry.end());
+    entries.push_back(std::move(item));
+  }
+
+  return entries;
+}
+
+std::vector<PrimitiveEntry> all_entries_from_top9(std::span<const uint8_t> top9) {
+  std::vector<PrimitiveEntry> entries;
+  std::vector<Field> fields;
+  if (!parse_fields(top9, fields)) return entries;
+
+  for (size_t i = 0; i < fields.size(); ++i) {
+    const auto& field = fields[i];
+    if (field.number != 502 || field.wire != 2) continue;
+    const auto entry = field_data(top9, field);
+    auto entry_id = top9_entry_id(entry);
+    if (!entry_id) continue;
+    PrimitiveEntry item;
+    item.top9_index = i;
+    item.entry_id = entry_id;
     item.data.assign(entry.begin(), entry.end());
     entries.push_back(std::move(item));
   }
@@ -158,7 +183,8 @@ void read_direct_snapshot(std::span<const uint8_t> message, UiPrimitive& out) {
   const std::array<uint32_t, 6> rotation_z_path{13, 12, 501, 502, 508, 3};
 
   out.name = read_string_path(message, name_path);
-  out.primitive_type_id = read_varint_path(message, type_path);
+  out.resource_id = read_varint_path(message, type_path);
+  out.primitive_type_id = out.resource_id;
   out.raw_color = read_varint_path(message, color_path);
   if (out.raw_color) out.color = color_from_varint(*out.raw_color);
   out.layer = read_varint_path(message, layer_path);
@@ -180,7 +206,7 @@ void read_wrapped_snapshot(std::span<const uint8_t> message, UiPrimitive& out) {
   const std::array<uint32_t, 3> name_path{505, 12, 501};
   const std::array<uint32_t, 4> type_path{505, 503, 31, 2};
   const std::array<uint32_t, 4> color_path{505, 503, 31, 4};
-  const std::array<uint32_t, 5> layer_path{505, 503, 13, 12, 503};
+  const std::array<uint32_t, 5> layer_path{505, 503, 13, 12, 502};
   const std::array<uint32_t, 8> pos_x_path{505, 503, 13, 12, 501, 502, 504, 501};
   const std::array<uint32_t, 8> pos_y_path{505, 503, 13, 12, 501, 502, 504, 502};
   const std::array<uint32_t, 8> size_w_path{505, 503, 13, 12, 501, 502, 505, 501};
@@ -191,7 +217,8 @@ void read_wrapped_snapshot(std::span<const uint8_t> message, UiPrimitive& out) {
   const std::array<uint32_t, 8> rotation_z_path{505, 503, 13, 12, 501, 502, 508, 3};
 
   out.name = read_string_path(message, name_path);
-  out.primitive_type_id = read_varint_path(message, type_path);
+  out.resource_id = read_varint_path(message, type_path);
+  out.primitive_type_id = out.resource_id;
   out.raw_color = read_varint_path(message, color_path);
   if (out.raw_color) out.color = color_from_varint(*out.raw_color);
   out.layer = read_varint_path(message, layer_path);
@@ -207,17 +234,62 @@ void read_wrapped_snapshot(std::span<const uint8_t> message, UiPrimitive& out) {
 
 UiPrimitive read_snapshot(const PrimitiveEntry& entry, size_t primitive_index) {
   UiPrimitive primitive;
+  primitive.asset_index = primitive_index;
   primitive.primitive_index = primitive_index;
   primitive.top9_index = entry.top9_index;
   primitive.entry_id = entry.entry_id;
   const std::array<uint32_t, 1> controller_path{504};
-  primitive.controller_entry_id = read_varint_path(std::span<const uint8_t>(entry.data.data(), entry.data.size()), controller_path);
+  primitive.parent_entry_id = read_varint_path(std::span<const uint8_t>(entry.data.data(), entry.data.size()), controller_path);
+  primitive.controller_entry_id = primitive.parent_entry_id;
 
   read_direct_snapshot(std::span<const uint8_t>(entry.data.data(), entry.data.size()), primitive);
   if (!snapshot_has_core_data(primitive)) {
     read_wrapped_snapshot(std::span<const uint8_t>(entry.data.data(), entry.data.size()), primitive);
   }
+  primitive.kind = primitive.resource_id ? "image" : "unknown";
   return primitive;
+}
+
+std::vector<uint64_t> child_ids_from_entry(std::span<const uint8_t> entry) {
+  const auto packed = direct_len_data(entry, 503);
+  if (!packed) return {};
+  return decode_packed_varints(std::span<const uint8_t>(packed->data(), packed->size()));
+}
+
+void read_group_snapshot(const PrimitiveEntry& entry, size_t asset_index, UiAsset& out) {
+  out.asset_index = asset_index;
+  out.primitive_index = asset_index;
+  out.top9_index = entry.top9_index;
+  out.entry_id = entry.entry_id;
+  out.kind = "group";
+  const auto span = std::span<const uint8_t>(entry.data.data(), entry.data.size());
+  const std::array<uint32_t, 1> parent_path{504};
+  const std::array<uint32_t, 3> name_path{505, 12, 501};
+  const std::array<uint32_t, 8> pos_x_path{505, 503, 13, 12, 501, 502, 504, 501};
+  const std::array<uint32_t, 8> pos_y_path{505, 503, 13, 12, 501, 502, 504, 502};
+  const std::array<uint32_t, 8> size_w_path{505, 503, 13, 12, 501, 502, 505, 501};
+  const std::array<uint32_t, 8> size_h_path{505, 503, 13, 12, 501, 502, 505, 502};
+  const std::array<uint32_t, 8> scale_x_path{505, 503, 13, 12, 501, 502, 501, 1};
+  const std::array<uint32_t, 8> scale_y_path{505, 503, 13, 12, 501, 502, 501, 2};
+  const std::array<uint32_t, 8> scale_z_path{505, 503, 13, 12, 501, 502, 501, 3};
+  const std::array<uint32_t, 8> rotation_z_path{505, 503, 13, 12, 501, 502, 508, 3};
+  const std::array<uint32_t, 5> mask_w_path{505, 503, 47, 2, 501};
+  const std::array<uint32_t, 5> mask_h_path{505, 503, 47, 2, 502};
+
+  out.parent_entry_id = read_varint_path(span, parent_path);
+  out.controller_entry_id = out.parent_entry_id;
+  out.name = read_string_path(span, name_path);
+  out.child_entry_ids = child_ids_from_entry(span);
+  if (auto value = read_fixed32_path(span, pos_x_path)) out.transform.position.x = *value;
+  if (auto value = read_fixed32_path(span, pos_y_path)) out.transform.position.y = *value;
+  if (auto value = read_fixed32_path(span, size_w_path)) out.transform.size.x = *value;
+  if (auto value = read_fixed32_path(span, size_h_path)) out.transform.size.y = *value;
+  if (auto value = read_fixed32_path(span, scale_x_path)) out.transform.scale.x = *value;
+  if (auto value = read_fixed32_path(span, scale_y_path)) out.transform.scale.y = *value;
+  if (auto value = read_fixed32_path(span, scale_z_path)) out.transform.scale.z = *value;
+  if (auto value = read_fixed32_path(span, rotation_z_path)) out.transform.rotation_z = *value;
+  if (auto value = read_fixed32_path(span, mask_w_path)) out.mask_size.x = *value;
+  if (auto value = read_fixed32_path(span, mask_h_path)) out.mask_size.y = *value;
 }
 
 }  // namespace
@@ -238,6 +310,41 @@ UiPrimitiveList list_ui_primitives(const GilFile& file, uint64_t controller_entr
   list.primitives.reserve(ordered_entries.size());
   for (size_t i = 0; i < ordered_entries.size(); ++i) {
     list.primitives.push_back(read_snapshot(ordered_entries[i], i));
+  }
+
+  return list;
+}
+
+UiAssetList list_ui_assets(const GilFile& file, uint64_t parent_entry_id) {
+  UiAssetList list;
+  list.parent_entry_id = parent_entry_id;
+  list.has_top9 = top_level_data(file, 9).has_value();
+  list.has_top46 = top_level_data(file, 46).has_value();
+
+  const auto top9 = top_level_data(file, 9);
+  if (!top9) return list;
+
+  const auto entries = all_entries_from_top9(*top9);
+  const auto child_ids = child_entry_ids_from_parent(*top9, parent_entry_id);
+  std::vector<PrimitiveEntry> ordered_entries = order_entries(entries, child_ids);
+  if (child_ids.empty()) {
+    for (const auto& entry : entries) {
+      const std::array<uint32_t, 1> parent_path{504};
+      const auto parent = read_varint_path(std::span<const uint8_t>(entry.data.data(), entry.data.size()), parent_path);
+      if (parent && *parent == parent_entry_id) ordered_entries.push_back(entry);
+    }
+  }
+
+  list.assets.reserve(ordered_entries.size());
+  for (size_t i = 0; i < ordered_entries.size(); ++i) {
+    const auto& entry = ordered_entries[i];
+    if (contains_ui_primitive_message(std::span<const uint8_t>(entry.data.data(), entry.data.size()))) {
+      list.assets.push_back(read_snapshot(entry, i));
+    } else if (!child_ids_from_entry(std::span<const uint8_t>(entry.data.data(), entry.data.size())).empty()) {
+      UiAsset group;
+      read_group_snapshot(entry, i, group);
+      list.assets.push_back(std::move(group));
+    }
   }
 
   return list;

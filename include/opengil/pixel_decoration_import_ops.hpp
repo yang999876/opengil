@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "opengil/gil.hpp"
@@ -12,12 +14,22 @@ namespace opengil {
 struct PixelDecorationImportOptions {
   uint64_t prefab_id = 0;
   uint64_t asset_id = 0;
+  std::optional<uint64_t> preview_object_id;
+  std::optional<std::string> prefab_name;
+  std::optional<uint64_t> target_tab_id;
+  std::optional<std::string> target_tab_name;
   double pixel_size = 1.0;
   bool merge_same_color_rects = true;
+  bool prefab_only = false;
+  bool move_to_uncategorized = false;
 };
 
 struct PixelDecorationImportSummary {
   uint64_t prefab_id = 0;
+  std::optional<uint64_t> preview_object_id;
+  std::optional<std::string> prefab_name;
+  std::optional<uint64_t> target_tab_id;
+  std::optional<std::string> target_tab_name;
   uint64_t asset_id = 0;
   size_t source_pixel_count = 0;
   size_t decoration_count = 0;

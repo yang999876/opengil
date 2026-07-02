@@ -60,7 +60,37 @@ struct PrefabDeleteMutation {
   DeletePrefabSummary summary;
 };
 
+struct PrefabTabSummary {
+  std::string kind;
+  std::optional<uint64_t> tab_id;
+  std::string tab_name;
+  uint64_t prefab_id = 0;
+  std::optional<uint64_t> source_tab_id;
+  std::string source_tab_name;
+  std::optional<uint64_t> target_tab_id;
+  std::string target_tab_name;
+  std::vector<uint32_t> changed_top_fields;
+};
+
+struct PrefabTabMutation {
+  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> payload;
+  PrefabTabSummary summary;
+};
+
 PrefabRenameMutation rename_prefab(const GilFile& file, uint64_t prefab_id, const std::string& new_name);
+
+PrefabTabMutation create_prefab_tab(
+    const GilFile& file,
+    const std::string& tab_name,
+    const std::optional<uint64_t>& tab_id = std::nullopt);
+
+PrefabTabMutation delete_prefab_tab_by_id(const GilFile& file, uint64_t tab_id);
+PrefabTabMutation delete_prefab_tab(const GilFile& file, const std::string& tab_name);
+
+PrefabTabMutation move_prefab_to_tab_by_id(const GilFile& file, uint64_t prefab_id, uint64_t tab_id);
+PrefabTabMutation move_prefab_to_tab(const GilFile& file, uint64_t prefab_id, const std::string& tab_name);
+PrefabTabMutation move_prefab_to_uncategorized(const GilFile& file, uint64_t prefab_id);
 
 PrefabCloneMutation clone_prefab_into_tab(
     const GilFile& file,
